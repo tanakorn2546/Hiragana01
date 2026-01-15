@@ -118,7 +118,7 @@ local_css()
 # --- 3. Database ---
 def init_connection():
     return mysql.connector.connect(
-        host="localhost",
+        host="www.cedubru.com",
         user="cedubruc_hiragana_app",
         password="7gZ8gDJyufzJyzELZkdg",
         database="cedubruc_hiragana_app"
