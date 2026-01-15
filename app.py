@@ -7,6 +7,7 @@ import os
 import mysql.connector
 import io
 import json
+import gdown # 📦 ต้องติดตั้ง pip install gdown ก่อนใช้งาน
 
 # --- [Config] ธีมญี่ปุ่น (ขาว-แดง-ชมพู) ---
 config_dir = ".streamlit"
@@ -167,41 +168,47 @@ def update_database(img_id, result, confidence):
         return True
     except: return False
 
-# --- 4. Smart Model Loader ---
+# --- 4. Smart Model Loader (แก้ไข: รองรับ Google Drive) ---
 if hasattr(st, 'cache_resource'): cache_decorator = st.cache_resource
 else: cache_decorator = st.experimental_singleton
 
 @cache_decorator
 def load_model():
+    # -------------------------------------------------------------
+    # 🔥 [แก้ไข] ใส่ Google Drive File ID ของคุณตรงนี้ (สำคัญ!) 🔥
+    file_id = '1ezDUsDxeabZX06ArdjtcWPk0uradYWDD' 
+    # -------------------------------------------------------------
+    
     model_name = 'hiragana_mobilenetv2_best.h5'
+    url = f'https://drive.google.com/uc?id={file_id}'
     
-    # 🔍 ค้นหาไฟล์โมเดลทั้ง 2 ที่ (หน้าแรก และ ในโฟลเดอร์ saved_models)
-    possible_paths = [
-        model_name,
-        os.path.join('saved_models', model_name)
-    ]
-    
-    found_path = None
-    for p in possible_paths:
-        if os.path.exists(p):
-            found_path = p
-            break
-            
-    if found_path:
-        try:
-            return tf.keras.models.load_model(found_path, compile=False)
-        except Exception as e:
-            st.error(f"❌ ไฟล์โมเดลเสียหาย: {e}")
-            return None
-    else:
-        st.error(f"❌ ไม่พบไฟล์ '{model_name}' กรุณารันไฟล์ Training ให้เสร็จก่อน")
+    # 1. เช็คว่ามีไฟล์อยู่ในโฟลเดอร์ปัจจุบันหรือไม่
+    if not os.path.exists(model_name):
+        # 2. ถ้าไม่มี ลองเช็คในโฟลเดอร์ saved_models
+        local_path = os.path.join('saved_models', model_name)
+        if os.path.exists(local_path):
+            model_name = local_path
+        else:
+            # 3. ถ้าไม่มีเลย ให้ดาวน์โหลดจาก Google Drive
+            st.warning("📥 กำลังดาวน์โหลด Model จาก Google Drive... (ใช้เวลาสักครู่)")
+            try:
+                gdown.download(url, model_name, quiet=False)
+                st.success("✅ ดาวน์โหลด Model สำเร็จ!")
+            except Exception as e:
+                st.error(f"❌ ดาวน์โหลดไม่สำเร็จ: {e} (ตรวจสอบ File ID และ Permission 'Anyone with the link')")
+                return None
+
+    # โหลด Model
+    try:
+        return tf.keras.models.load_model(model_name, compile=False)
+    except Exception as e:
+        st.error(f"❌ ไฟล์โมเดลเสียหาย: {e}")
         return None
 
 # --- Smart Class Loader ---
 def load_class_names():
     json_name = 'class_indices.json'
     
-    # 🔍 ค้นหาไฟล์ JSON ทั้ง 2 ที่เหมือนกัน
     possible_paths = [
         json_name,
         os.path.join('saved_models', json_name)
@@ -216,11 +223,10 @@ def load_class_names():
     if found_path:
         with open(found_path, 'r', encoding='utf-8') as f:
             class_indices = json.load(f)
-        # เรียงลำดับให้ถูกต้องตาม Index 0, 1, 2...
         sorted_classes = [k for k, v in sorted(class_indices.items(), key=lambda item: item[1])]
         return sorted_classes
     else:
-        st.warning("⚠️ ไม่พบไฟล์ class_indices.json ใช้ค่า Default (อาจไม่แม่นยำ)")
+        st.warning("⚠️ ไม่พบไฟล์ class_indices.json ใช้ค่า Default")
         return [
             'a', 'i', 'u', 'e', 'o',
             'ka', 'ki', 'ku', 'ke', 'ko',
@@ -234,18 +240,15 @@ def load_class_names():
             'wa', 'wo', 'n'
         ]
 
-# 🔥 [แก้ไขแล้ว] ฟังก์ชันทำนายผล รองรับ RGBA -> RGB 🔥
+# ฟังก์ชันทำนายผล
 def import_and_predict(image_data, model):
     size = (224, 224) 
     image = ImageOps.fit(image_data, size, Image.Resampling.LANCZOS)
     
-    # แปลงเป็น RGB เสมอ เพื่อแก้ปัญหาภาพที่มีพื้นหลังโปร่งใส (RGBA)
     if image.mode != "RGB":
         image = image.convert("RGB")
         
     img_array = np.asarray(image).astype(np.float32)
-    
-    # Preprocess ตามแบบ MobileNetV2
     img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
 
     data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
@@ -323,13 +326,11 @@ if len(image_list) > 0:
                                 idx = np.argmax(preds)
                                 conf = np.max(preds) * 100
                                 
-                                # เช็ค Index
                                 if idx < len(class_names):
                                     res_code = class_names[idx]
                                 else:
                                     res_code = "Unknown"
 
-                                # Hiragana Mapping
                                 hiragana_map = {
                                     'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
                                     'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
@@ -359,8 +360,7 @@ if len(image_list) > 0:
                 if "ยังไม่ตรวจ" in filter_option:
                     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
                     if st.button(f"⚡ อ่านลายมือทั้งหมด ({len(image_list)} รูป)"):
-                        # Logic for batch processing
-                        pass 
+                         pass 
 
     # --- ปุ่มนำทาง ---
     st.markdown("<br>", unsafe_allow_html=True) 
