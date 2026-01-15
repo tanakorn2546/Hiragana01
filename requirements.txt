@@ -1,0 +1,10 @@
+streamlit==1.12.0
+tensorflow==2.10.0
+protobuf<3.20
+pillow
+numpy<1.24
+scipy
+gdown
+pandas
+altair<5
+mysql-connector-python
