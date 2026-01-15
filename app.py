@@ -119,9 +119,9 @@ local_css()
 def init_connection():
     return mysql.connector.connect(
         host="localhost",
-        user="root",
-        password="",
-        database="hiragana_app" 
+        user="cedubruc_hiragana_app",
+        password="7gZ8gDJyufzJyzELZkdg",
+        database="cedubruc_hiragana_app"
     )
 
 def get_image_list(filter_mode):
