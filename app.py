@@ -7,9 +7,10 @@ import os
 import mysql.connector
 import io
 import json
-import gdown # 📦 ต้องติดตั้ง pip install gdown ก่อนใช้งาน
+import gdown 
+import requests 
 
-# --- [Config] ธีมญี่ปุ่น (ขาว-แดง-ชมพู) ---
+# --- [Config] ธีมญี่ปุ่น ---
 config_dir = ".streamlit"
 config_path = os.path.join(config_dir, "config.toml")
 
@@ -62,60 +63,24 @@ def local_css():
             box-shadow: 0 10px 25px rgba(211, 47, 47, 0.2) !important;
             border: 5px solid #ffffff !important;
         }
-        div[role="radiogroup"] label {
-            background: linear-gradient(135deg, #e57373 0%, #D32F2F 100%) !important;
-            border: none !important;
-            padding: 10px 20px !important;
-            border-radius: 25px !important;
-            color: #ffffff !important; 
-        }
-        div[role="radiogroup"] label:hover {
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 10px rgba(211, 47, 47, 0.3) !important;
-        }
-        .stRadio > label {
-            color: #D32F2F !important;
-            font-weight: 800 !important;
-            font-size: 1.3rem !important;
-        }
-        div.stButton > button {
-            background: linear-gradient(135deg, #ef5350 0%, #c62828 100%) !important;
-            color: #ffffff !important;
-            border: none !important;
-            border-radius: 15px !important;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2) !important;
-        }
-        div.stButton > button:hover {
-            transform: translateY(-2px) !important;
-            box-shadow: 0 6px 15px rgba(198, 40, 40, 0.4) !important;
-        }
-        div[data-testid="stImage"] > img {
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
-            border: 2px solid #ffcdd2;
-        }
         h1 { 
             text-align: center; color: #D32F2F !important; 
             font-weight: 800 !important; font-size: 2.2rem !important;
         }
-        .custom-home-btn {
-            background: linear-gradient(135deg, #424242 0%, #212121 100%);
-            color: #ffffff !important;
-            text-decoration: none;
-            padding: 0.8rem 2rem;
-            border-radius: 15px;
-            display: inline-block;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            transition: all 0.3s ease;
+        .result-box {
+            background-color: #FFEBEE; 
+            padding: 20px; 
+            border-radius: 15px; 
+            border: 2px solid #D32F2F; 
+            margin-bottom: 20px; 
             text-align: center;
-            width: 100%;
         }
     </style>
     """, unsafe_allow_html=True)
 
 local_css()
 
-# --- 3. Database ---
+# --- 3. Database Functions ---
 def init_connection():
     return mysql.connector.connect(
         host="www.cedubru.com",
@@ -124,278 +89,259 @@ def init_connection():
         database="cedubruc_hiragana_app"
     )
 
-def get_image_list(filter_mode):
+def get_work_data(work_id):
+    """ดึงข้อมูลงานชิ้นเดียวจาก ID"""
+    try:
+        conn = init_connection()
+        cursor = conn.cursor(dictionary=True)
+        sql = "SELECT id, user_id, char_code, image_path, ai_result, ai_confidence FROM progress WHERE id = %s"
+        cursor.execute(sql, (work_id,))
+        data = cursor.fetchone()
+        conn.close()
+        return data
+    except Exception as e:
+        st.error(f"❌ DB Error (Get Work): {e}")
+        return None
+
+def update_progress_result(work_id, result, confidence):
+    """บันทึกผล AI ลงฐานข้อมูล"""
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        table_name = "culantro_images" 
+        sql = "UPDATE progress SET ai_result = %s, ai_confidence = %s WHERE id = %s"
+        cursor.execute(sql, (result, float(confidence), work_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        st.error(f"❌ Update Error: {e}")
+        return False
+
+def get_progress_list(filter_mode):
+    """ดึงรายการงานทั้งหมดจากตาราง progress (สำหรับ Gallery Mode)"""
+    try:
+        conn = init_connection()
+        cursor = conn.cursor()
         
+        # เลือกดึงเฉพาะข้อมูลที่จำเป็นมาแสดงใน List
         if "ยังไม่ตรวจ" in filter_mode:
-            sql = f"SELECT id, image_name, prediction_result FROM {table_name} WHERE prediction_result IS NULL ORDER BY id ASC"
-        elif "ตรวจแล้ว" in filter_mode:
-            sql = f"SELECT id, image_name, prediction_result FROM {table_name} WHERE prediction_result IS NOT NULL ORDER BY id DESC"
+            sql = "SELECT id, user_id, char_code, ai_result FROM progress WHERE ai_result IS NULL ORDER BY id ASC"
         else:
-            sql = f"SELECT id, image_name, prediction_result FROM {table_name} ORDER BY id DESC"
-        
+            sql = "SELECT id, user_id, char_code, ai_result FROM progress ORDER BY id DESC"
+            
         cursor.execute(sql)
         data = cursor.fetchall()
         conn.close()
         return data
-    except Exception as e:
-        st.error(f"❌ DB Error: {e}")
-        return []
+    except: return []
 
-def get_image_data(img_id):
-    try:
-        conn = init_connection()
-        cursor = conn.cursor()
-        table_name = "culantro_images"
-        cursor.execute(f"SELECT image_data, prediction_result, confidence FROM {table_name} WHERE id = %s", (img_id,))
-        data = cursor.fetchone()
-        conn.close()
-        return data 
-    except: return None
-
-def update_database(img_id, result, confidence):
-    try:
-        conn = init_connection()
-        cursor = conn.cursor()
-        table_name = "culantro_images"
-        sql = f"UPDATE {table_name} SET prediction_result = %s, confidence = %s WHERE id = %s"
-        cursor.execute(sql, (result, float(confidence), img_id))
-        conn.commit()
-        conn.close()
-        return True
-    except: return False
-
-# --- 4. Smart Model Loader (แก้ไข: รองรับ Google Drive) ---
-if hasattr(st, 'cache_resource'): cache_decorator = st.cache_resource
-else: cache_decorator = st.experimental_singleton
+# --- 4. Model Loader & Helpers ---
+# Helper สำหรับรองรับ Streamlit เวอร์ชันเก่า/ใหม่
+if hasattr(st, 'cache_resource'):
+    cache_decorator = st.cache_resource
+else:
+    cache_decorator = st.experimental_singleton
 
 @cache_decorator
 def load_model():
-    # -------------------------------------------------------------
-    # 🔥 [แก้ไข] ใส่ Google Drive File ID ของคุณตรงนี้ (สำคัญ!) 🔥
     file_id = '1ezDUsDxeabZX06ArdjtcWPk0uradYWDD' 
-    # -------------------------------------------------------------
-    
     model_name = 'hiragana_mobilenetv2_best.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     
-    # 1. เช็คว่ามีไฟล์อยู่ในโฟลเดอร์ปัจจุบันหรือไม่
     if not os.path.exists(model_name):
-        # 2. ถ้าไม่มี ลองเช็คในโฟลเดอร์ saved_models
-        local_path = os.path.join('saved_models', model_name)
-        if os.path.exists(local_path):
-            model_name = local_path
-        else:
-            # 3. ถ้าไม่มีเลย ให้ดาวน์โหลดจาก Google Drive
-            st.warning("📥 กำลังดาวน์โหลด Model จาก Google Drive... (ใช้เวลาสักครู่)")
-            try:
-                gdown.download(url, model_name, quiet=False)
-                st.success("✅ ดาวน์โหลด Model สำเร็จ!")
-            except Exception as e:
-                st.error(f"❌ ดาวน์โหลดไม่สำเร็จ: {e} (ตรวจสอบ File ID และ Permission 'Anyone with the link')")
-                return None
-
-    # โหลด Model
+        try:
+            gdown.download(url, model_name, quiet=False)
+        except: return None
+    
     try:
         return tf.keras.models.load_model(model_name, compile=False)
     except Exception as e:
-        st.error(f"❌ ไฟล์โมเดลเสียหาย: {e}")
+        st.error(f"❌ Model Error: {e}")
         return None
 
-# --- Smart Class Loader ---
 def load_class_names():
-    json_name = 'class_indices.json'
-    
-    possible_paths = [
-        json_name,
-        os.path.join('saved_models', json_name)
+    return [
+        'a', 'i', 'u', 'e', 'o',
+        'ka', 'ki', 'ku', 'ke', 'ko',
+        'sa', 'shi', 'su', 'se', 'so',
+        'ta', 'chi', 'tsu', 'te', 'to',
+        'na', 'ni', 'nu', 'ne', 'no',
+        'ha', 'hi', 'fu', 'he', 'ho',
+        'ma', 'mi', 'mu', 'me', 'mo',
+        'ya', 'yu', 'yo',
+        'ra', 'ri', 'ru', 're', 'ro',
+        'wa', 'wo', 'n'
     ]
-    
-    found_path = None
-    for p in possible_paths:
-        if os.path.exists(p):
-            found_path = p
-            break
-            
-    if found_path:
-        with open(found_path, 'r', encoding='utf-8') as f:
-            class_indices = json.load(f)
-        sorted_classes = [k for k, v in sorted(class_indices.items(), key=lambda item: item[1])]
-        return sorted_classes
-    else:
-        st.warning("⚠️ ไม่พบไฟล์ class_indices.json ใช้ค่า Default")
-        return [
-            'a', 'i', 'u', 'e', 'o',
-            'ka', 'ki', 'ku', 'ke', 'ko',
-            'sa', 'shi', 'su', 'se', 'so',
-            'ta', 'chi', 'tsu', 'te', 'to',
-            'na', 'ni', 'nu', 'ne', 'no',
-            'ha', 'hi', 'fu', 'he', 'ho',
-            'ma', 'mi', 'mu', 'me', 'mo',
-            'ya', 'yu', 'yo',
-            'ra', 'ri', 'ru', 're', 'ro',
-            'wa', 'wo', 'n'
-        ]
 
-# ฟังก์ชันทำนายผล
-def import_and_predict(image_data, model):
+def get_display_text(romaji):
+    mapping = {
+        'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
+        'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
+        'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
+        'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
+        'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
+        'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
+        'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
+        'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
+        'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
+        'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
+    }
+    return mapping.get(romaji, romaji)
+
+def predict_image(image, model, class_names):
     size = (224, 224) 
-    image = ImageOps.fit(image_data, size, Image.Resampling.LANCZOS)
-    
-    if image.mode != "RGB":
-        image = image.convert("RGB")
-        
+    image = ImageOps.fit(image, size, Image.Resampling.LANCZOS)
+    if image.mode != "RGB": image = image.convert("RGB")
     img_array = np.asarray(image).astype(np.float32)
     img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
-
     data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
     data[0] = img_array
-    return model.predict(data)
+    
+    preds = model.predict(data)
+    idx = np.argmax(preds)
+    conf = np.max(preds) * 100
+    label = class_names[idx] if idx < len(class_names) else "Unknown"
+    return label, conf
 
-# --- 5. Main UI ---
+def get_query_param(key):
+    # รองรับ Streamlit ทุกเวอร์ชัน
+    if hasattr(st, 'query_params'):
+        return st.query_params.get(key)
+    try:
+        params = st.experimental_get_query_params()
+        if key in params: return params[key][0]
+        return None
+    except: return None
+
+# --- 5. Main Application Flow ---
 model = load_model()
 class_names = load_class_names()
 
 st.markdown("""
     <div class='app-header-icon'>🇯🇵</div>
     <h1>Hiragana Sensei AI</h1>
-    <p style='text-align: center; color: #555; margin-bottom: 30px; font-size: 1.1rem;'>
-        ระบบตรวจจับและจำแนกตัวอักษรฮิรางานะด้วย AI (MobileNetV2)
-    </p>
 """, unsafe_allow_html=True)
 
-# --- ตัวกรอง ---
-c1, c2, c3 = st.columns([0.1, 3, 0.1])
-with c2:
-    filter_option = st.radio(
-        "📂 เลือกดูข้อมูล:", 
-        ["ทั้งหมด (All)", "ตรวจแล้ว (Analyzed)", "ยังไม่ตรวจ (Pending)"], 
-    )
+# ตรวจสอบว่าเข้าผ่าน Link หรือไม่
+target_work_id = get_query_param("work_id")
+force_teacher_mode = target_work_id is not None
 
-image_list = get_image_list(filter_option)
-
-if len(image_list) > 0:
-    id_list = [row[0] for row in image_list]
+# ==========================================
+# ส่วนจัดการโหลดรูปภาพและทำนายผล (ใช้ร่วมกันทั้ง 2 โหมด)
+# ==========================================
+def process_work_item(work_id):
+    work_data = get_work_data(work_id)
     
-    if 'current_index' not in st.session_state:
-        st.session_state.current_index = 0
-    if st.session_state.current_index >= len(id_list):
-        st.session_state.current_index = 0
+    if work_data and work_data['image_path']:
+        # สร้าง URL รูปภาพจากฐานข้อมูล
+        image_url = f"https://www.cedubru.com/{work_data['image_path']}"
+        
+        st.markdown(f"#### 📝 งาน ID: {work_id} | ผู้เรียน ID: {work_data['user_id']} | ตัวอักษร: {work_data['char_code']}")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            try:
+                # โหลดรูปผ่าน HTTP Request
+                response = requests.get(image_url, timeout=10)
+                if response.status_code == 200:
+                    image = Image.open(io.BytesIO(response.content))
+                    st.image(image, caption="ภาพที่วาด", use_column_width=True)
+                    
+                    # ปุ่มตรวจสอบ
+                    if st.button(f"🔍 ตรวจสอบ ID {work_id}", type="primary", key=f"btn_{work_id}"):
+                        if model:
+                            with st.spinner("AI กำลังวิเคราะห์..."):
+                                label_romaji, conf = predict_image(image, model, class_names)
+                                final_text = get_display_text(label_romaji)
+                                
+                                # บันทึก
+                                if update_progress_result(work_id, final_text, conf):
+                                    st.success("✅ บันทึกเรียบร้อย")
+                                    # เก็บสถานะเพื่อแสดงผล
+                                    st.session_state[f'res_{work_id}'] = (final_text, conf)
+                                else:
+                                    st.error("บันทึกข้อมูลล้มเหลว")
+                        else:
+                            st.error("Model Error")
+                else:
+                    st.error(f"โหลดรูปไม่ได้ (HTTP {response.status_code})")
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาด: {e}")
 
-    current_id = id_list[st.session_state.current_index]
-    
-    st.markdown("---")
-    st.markdown(f"<div style='text-align: center; color: #333; margin-bottom: 15px; font-weight: normal; font-size: 1.1rem; background: #FFEBEE; padding: 10px; border-radius: 10px;'>📝 รูปที่ {st.session_state.current_index + 1} / {len(id_list)} (ID: {current_id})</div>", unsafe_allow_html=True)
-
-    data_row = get_image_data(current_id)
-    
-    if data_row:
-        blob_data, saved_result, saved_conf = data_row
-        image = Image.open(io.BytesIO(blob_data))
-        
-        col_img, col_act = st.columns([1, 1])
-        
-        with col_img:
-            st.image(image, use_column_width=True)
-        
-        with col_act:
-            st.markdown("### ผลลัพธ์ AI")
-            
-            if saved_result:
+        with col2:
+            # แสดงผลลัพธ์
+            if f'res_{work_id}' in st.session_state:
+                r_txt, r_conf = st.session_state[f'res_{work_id}']
                 st.markdown(f"""
-                    <div style="background-color: #FFEBEE; padding: 20px; border-radius: 15px; border: 2px solid #D32F2F; margin-bottom: 20px; text-align: center;">
-                        <h1 style="color: #D32F2F !important; margin: 0; font-size: 3rem; font-weight: 800;">{saved_result}</h1>
-                        <p style="margin-top: 10px; font-size: 1rem; color: #555;">ความมั่นใจ: <strong>{saved_conf:.2f}%</strong></p>
+                    <div class="result-box">
+                        <h3>ผลลัพธ์ AI</h3>
+                        <h1 style="color: #D32F2F; font-size: 2.5rem; margin: 0;">{r_txt}</h1>
+                        <p>ความมั่นใจ: <strong>{r_conf:.2f}%</strong></p>
                     </div>
                 """, unsafe_allow_html=True)
-                
-                if st.button("🔄 ตรวจสอบใหม่"):
-                    update_database(current_id, None, 0)
-                    st.experimental_rerun()
-            
-            else:
-                st.info("⚠️ ยังไม่ได้ระบุตัวอักษร")
-                if st.button("🇯🇵 อ่านตัวอักษรนี้"):
-                    if model:
-                        with st.spinner("AI กำลังอ่านลายมือ..."):
-                            try:
-                                preds = import_and_predict(image, model)
-                                idx = np.argmax(preds)
-                                conf = np.max(preds) * 100
-                                
-                                if idx < len(class_names):
-                                    res_code = class_names[idx]
-                                else:
-                                    res_code = "Unknown"
+            elif work_data.get('ai_result'):
+                st.markdown(f"""
+                    <div class="result-box" style="background:#f9f9f9; border-color:#ccc;">
+                        <h4>ผลการตรวจเดิม</h4>
+                        <h2 style="color: #555;">{work_data['ai_result']}</h2>
+                        <p>ความมั่นใจ: {work_data['ai_confidence']}%</p>
+                    </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.warning("❌ ไม่พบข้อมูลงานนี้")
 
-                                hiragana_map = {
-                                    'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
-                                    'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
-                                    'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
-                                    'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
-                                    'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
-                                    'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
-                                    'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
-                                    'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
-                                    'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                    'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
-                                }
-                                
-                                final_res = hiragana_map.get(res_code, res_code)
-                                
-                                update_database(current_id, final_res, conf)
-                                st.success(f"อ่านได้ว่า: {final_res}")
-                                time.sleep(0.5)
-                                st.experimental_rerun()
+# ==========================================
+# 🅰️ MODE 1: Teacher Direct Link (เข้าผ่านลิงก์)
+# ==========================================
+if force_teacher_mode:
+    st.info(f"📋 โหมดตรวจสอบงานรายบุคคล (Link Mode)")
+    process_work_item(target_work_id)
 
-                            except Exception as e:
-                                st.error(f"💥 เกิดข้อผิดพลาด: {e}")
-                    else:
-                        st.error("ไม่พบโมเดล")
-
-                # --- Batch Process ---
-                if "ยังไม่ตรวจ" in filter_option:
-                    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-                    if st.button(f"⚡ อ่านลายมือทั้งหมด ({len(image_list)} รูป)"):
-                         pass 
-
-    # --- ปุ่มนำทาง ---
-    st.markdown("<br>", unsafe_allow_html=True) 
-    c_prev, c_empty, c_next = st.columns([1, 0.2, 1]) 
-    
-    with c_prev:
-        if st.session_state.current_index > 0:
-            if st.button("◀️ ย้อนกลับ"):
-                st.session_state.current_index -= 1
-                st.experimental_rerun()
-            
-    with c_next:
-        if st.session_state.current_index < len(id_list) - 1:
-            if st.button("ถัดไป ▶️"):
-                st.session_state.current_index += 1
-                st.experimental_rerun()
-        else:
-             if st.button("🔄 กลับไปรูปแรก"):
-                st.session_state.current_index = 0
-                st.experimental_rerun()
-
+# ==========================================
+# 🅱️ MODE 2: Gallery Browser (เข้าดูรายการทั้งหมดจาก progress)
+# ==========================================
 else:
-    st.warning("ยังไม่มีข้อมูลรูปภาพในระบบ")
+    st.write("---")
+    st.markdown("### 📂 คลังงานนักเรียน (Database: Progress)")
+    
+    # ตัวกรอง
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        filter_option = st.radio("ตัวกรอง:", ["ทั้งหมด", "ยังไม่ตรวจ"])
+    
+    # ดึงรายการจาก Table progress
+    progress_list = get_progress_list(filter_option)
 
-# --- Link กลับเว็บหลัก ---
-base_url = "http://www.your-school-website.com/" 
-full_url = base_url
+    if len(progress_list) > 0:
+        # ดึง ID มาใส่ List เพื่อทำ Pagination แบบง่าย
+        id_list = [row[0] for row in progress_list]
+        
+        # State สำหรับจำว่าดูงานไหนอยู่
+        if 'idx' not in st.session_state: st.session_state.idx = 0
+        if st.session_state.idx >= len(id_list): st.session_state.idx = 0
+        if st.session_state.idx < 0: st.session_state.idx = len(id_list) - 1
+        
+        current_work_id = id_list[st.session_state.idx]
+        
+        # แสดงผลงานปัจจุบัน
+        process_work_item(current_work_id)
+        
+        # ปุ่มควบคุม Next / Prev
+        st.write("---")
+        col_prev, col_info, col_next = st.columns([1, 2, 1])
+        with col_prev:
+            if st.button("◀️ ก่อนหน้า", use_container_width=True):
+                st.session_state.idx -= 1
+                st.experimental_rerun()
+        with col_info:
+            st.markdown(f"<div style='text-align:center; padding-top:10px;'>ลำดับที่ {st.session_state.idx + 1} / {len(id_list)}</div>", unsafe_allow_html=True)
+        with col_next:
+            if st.button("ถัดไป ▶️", use_container_width=True):
+                st.session_state.idx += 1
+                st.experimental_rerun()
+                
+    else:
+        st.info("ไม่มีรายการงานที่ตรงกับเงื่อนไข")
 
-st.markdown(f"""
-    <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
-        <a href="{full_url}" target="_blank" class="custom-home-btn">
-            🏠 กลับสู่หน้าบทเรียน
-        </a>
-    </div>
-    <div class="footer-credit">
-        <strong>Hiragana Image Classification System V.2.0</strong>
-    </div>
-""", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; margin-top: 50px; color: #aaa; font-size: 0.8rem;'>Hiragana Sensei AI System</div>", unsafe_allow_html=True)
