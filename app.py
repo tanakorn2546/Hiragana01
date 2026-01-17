@@ -8,7 +8,7 @@ import mysql.connector
 import io
 import json
 import gdown 
-import requests # 📦 เพิ่ม requests เพื่อโหลดรูปจาก URL
+import requests 
 
 # --- [Config] ธีมญี่ปุ่น (ขาว-แดง-ชมพู) ---
 config_dir = ".streamlit"
@@ -292,12 +292,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
-# 🚦 LOGIC SWITCH: เช็คว่ามาจาก Teacher หรือเปิดเล่นเอง
+# 🚦 LOGIC SWITCH: แก้ไขให้รองรับทุกเวอร์ชัน (Old & New)
 # =========================================================
-query_params = st.query_params
-target_work_id = query_params.get("work_id", None)
-target_image_url = query_params.get("image_url", None)
+try:
+    # สำหรับ Streamlit รุ่นใหม่ (1.30+)
+    query_params = st.query_params
+    target_work_id = query_params.get("work_id", None)
+    target_image_url = query_params.get("image_url", None)
+except AttributeError:
+    # สำหรับ Streamlit รุ่นเก่า (Fix: ใช้ experimental_get_query_params)
+    query_params = st.experimental_get_query_params()
+    target_work_id = query_params.get("work_id", [None])[0]
+    target_image_url = query_params.get("image_url", [None])[0]
 
+# --- เริ่มตรวจสอบ Logic ---
 if target_work_id and target_image_url:
     # -----------------------------------------------
     # 🎯 โหมด Teacher (UI ใหม่ที่แทรกเข้ามา)
