@@ -176,7 +176,7 @@ else: cache_decorator = st.experimental_singleton
 def load_model():
     # -------------------------------------------------------------
     # 🔥 [แก้ไข] ใส่ Google Drive File ID ของคุณตรงนี้ (สำคัญ!) 🔥
-    file_id = '1XdUxY4y5KLhBEKwnMKC5Y6LE0ShSlx6X' 
+    file_id = '19raB13lWpH9jjlImjp9VQ-gY7jvpPt8k' 
     # -------------------------------------------------------------
     
     model_name = 'hiragana_mobilenetv2_best.h5'
