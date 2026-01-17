@@ -143,15 +143,26 @@ def get_image_data_gallery(img_id):
         return data 
     except: return None
 
-# --- 4. Model Loader ---
-@st.cache_resource
+# --- 4. Model Loader (แก้ไข: เพิ่มการตรวจสอบเวอร์ชัน Streamlit) ---
+# ตรวจสอบว่ามี cache_resource หรือไม่ (สำหรับ Streamlit เวอร์ชันเก่า/ใหม่)
+if hasattr(st, 'cache_resource'):
+    cache_decorator = st.cache_resource
+else:
+    cache_decorator = st.experimental_singleton
+
+@cache_decorator
 def load_model():
     file_id = '1ezDUsDxeabZX06ArdjtcWPk0uradYWDD' 
     model_name = 'hiragana_mobilenetv2_best.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     
+    # ดาวน์โหลดโมเดลถ้าไม่มี
     if not os.path.exists(model_name):
-        gdown.download(url, model_name, quiet=False)
+        try:
+            gdown.download(url, model_name, quiet=False)
+        except Exception as e:
+            # ถ้าโหลดไม่ได้ ให้ return None ไปก่อนเพื่อไม่ให้ App พังทันที
+            return None
     
     try:
         return tf.keras.models.load_model(model_name, compile=False)
