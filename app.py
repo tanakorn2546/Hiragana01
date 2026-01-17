@@ -8,7 +8,7 @@ import mysql.connector
 import io
 import json
 import gdown 
-import requests # 📦 จำเป็นต้องมี requests เพื่อโหลดรูปจาก URL
+import requests 
 
 # --- [Config] ธีมญี่ปุ่น (ขาว-แดง-ชมพู) ---
 config_dir = ".streamlit"
@@ -89,12 +89,10 @@ def init_connection():
         database="cedubruc_hiragana_app"
     )
 
-# [ใหม่] ฟังก์ชันสำหรับโหมด Teacher (ตาราง progress)
 def get_student_work(work_id):
     try:
         conn = init_connection()
         cursor = conn.cursor(dictionary=True)
-        # ดึง Path รูป และผลลัพธ์ AI เดิม
         sql = "SELECT image_path, ai_result, ai_confidence FROM progress WHERE id = %s"
         cursor.execute(sql, (work_id,))
         data = cursor.fetchone()
@@ -117,7 +115,6 @@ def update_student_progress(work_id, result, confidence):
         st.error(f"❌ Update Error: {e}")
         return False
 
-# ฟังก์ชันเดิมสำหรับโหมด Gallery (ตาราง culantro_images)
 def get_image_list(filter_mode):
     try:
         conn = init_connection()
@@ -143,11 +140,12 @@ def get_image_data_gallery(img_id):
         return data 
     except: return None
 
-# --- 4. Model Loader (แก้ไข: เพิ่มการตรวจสอบเวอร์ชัน Streamlit) ---
-# ตรวจสอบว่ามี cache_resource หรือไม่ (สำหรับ Streamlit เวอร์ชันเก่า/ใหม่)
+# --- 4. Model Loader (รองรับทุกเวอร์ชัน) ---
+# [แก้จุดที่ 1] เลือกใช้ Decorator ให้ตรงกับเวอร์ชัน
 if hasattr(st, 'cache_resource'):
     cache_decorator = st.cache_resource
 else:
+    # สำหรับ Streamlit เวอร์ชันเก่า
     cache_decorator = st.experimental_singleton
 
 @cache_decorator
@@ -156,13 +154,10 @@ def load_model():
     model_name = 'hiragana_mobilenetv2_best.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     
-    # ดาวน์โหลดโมเดลถ้าไม่มี
     if not os.path.exists(model_name):
         try:
             gdown.download(url, model_name, quiet=False)
-        except Exception as e:
-            # ถ้าโหลดไม่ได้ ให้ return None ไปก่อนเพื่อไม่ให้ App พังทันที
-            return None
+        except: return None
     
     try:
         return tf.keras.models.load_model(model_name, compile=False)
@@ -171,7 +166,6 @@ def load_model():
         return None
 
 def load_class_names():
-    # กำหนดค่าคงที่ไว้เลยเพื่อความชัวร์
     return [
         'a', 'i', 'u', 'e', 'o',
         'ka', 'ki', 'ku', 'ke', 'ko',
@@ -215,6 +209,21 @@ def predict_image(image, model, class_names):
     label = class_names[idx] if idx < len(class_names) else "Unknown"
     return label, conf
 
+# [แก้จุดที่ 2] ฟังก์ชันช่วยดึงค่าจาก URL รองรับทุกเวอร์ชัน
+def get_query_param(key):
+    # ลองใช้แบบใหม่ (v1.30+)
+    if hasattr(st, 'query_params'):
+        return st.query_params.get(key)
+    
+    # ถ้าไม่มีให้ใช้แบบเก่า (v1.29-)
+    try:
+        params = st.experimental_get_query_params()
+        if key in params:
+            return params[key][0] # แบบเก่าคืนค่าเป็น list ['val']
+        return None
+    except:
+        return None
+
 # --- 5. Main Application Flow ---
 model = load_model()
 class_names = load_class_names()
@@ -224,9 +233,8 @@ st.markdown("""
     <h1>Hiragana Sensei AI</h1>
 """, unsafe_allow_html=True)
 
-# ตรวจสอบว่ามี work_id ส่งมาจาก URL หรือไม่ (โหมด Teacher)
-query_params = st.query_params
-target_work_id = query_params.get("work_id", None)
+# ใช้ฟังก์ชันช่วยดึงค่า work_id
+target_work_id = get_query_param("work_id")
 
 # ==========================================
 # 🅰️ MODE 1: Teacher Direct Link (มี ID)
@@ -234,31 +242,26 @@ target_work_id = query_params.get("work_id", None)
 if target_work_id:
     st.info(f"📋 โหมดตรวจสอบงานนักเรียน (Work ID: {target_work_id})")
     
-    # ดึงข้อมูลจาก DB
     work_data = get_student_work(target_work_id)
     
     if work_data and work_data['image_path']:
-        # สร้าง URL เต็ม (เนื่องจากใน DB เก็บเป็น path สั้นๆ)
         image_url = f"https://www.cedubru.com/{work_data['image_path']}"
         
         col1, col2 = st.columns([1, 1])
         
         with col1:
             try:
-                # โหลดรูปจาก Server ด้วย requests
                 response = requests.get(image_url, timeout=10)
                 if response.status_code == 200:
                     image = Image.open(io.BytesIO(response.content))
                     st.image(image, caption="รูปจากนักเรียน", use_column_width=True)
                     
-                    # ปุ่มกดตรวจสอบ
                     if st.button("🔍 ตรวจสอบด้วย AI", type="primary"):
                         if model:
                             with st.spinner("AI กำลังวิเคราะห์..."):
                                 label_romaji, conf = predict_image(image, model, class_names)
                                 final_text = get_display_text(label_romaji)
                                 
-                                # บันทึกผลลง DB (Progress table)
                                 if update_student_progress(target_work_id, final_text, conf):
                                     st.success("✅ บันทึกผลเรียบร้อย!")
                                     st.session_state['teacher_result'] = (final_text, conf)
@@ -273,7 +276,6 @@ if target_work_id:
                 st.error(f"Error loading image: {e}")
 
         with col2:
-            # แสดงผลลัพธ์
             if 'teacher_result' in st.session_state:
                 res_text, res_conf = st.session_state['teacher_result']
                 st.markdown(f"""
@@ -288,7 +290,6 @@ if target_work_id:
                     del st.session_state['teacher_result']
                     st.experimental_rerun()
             elif work_data.get('ai_result'):
-                # แสดงผลเดิมถ้ามีอยู่แล้ว
                 st.markdown(f"""
                     <div class="result-box" style="background:#f9f9f9; border-color:#ccc;">
                         <h4>ผลการตรวจเดิม</h4>
@@ -305,7 +306,6 @@ if target_work_id:
 # ==========================================
 else:
     st.write("---")
-    # ส่วนนี้คือโค้ดเดิมสำหรับดูรูปใน culantro_images
     c1, c2, c3 = st.columns([0.1, 3, 0.1])
     with c2:
         filter_option = st.radio("📂 เลือกดูข้อมูล (Gallery Mode):", ["ทั้งหมด", "ยังไม่ตรวจ"])
@@ -334,9 +334,7 @@ else:
                         label, conf = predict_image(image, model, class_names)
                         final_res = get_display_text(label)
                         st.success(f"ผลลัพธ์: {final_res} ({conf:.2f}%)")
-                        # (ส่วนนี้ไม่ได้เขียน update_database ของ gallery เพื่อความกระชับ)
         
-        # Navigation
         col_p, col_n = st.columns(2)
         with col_p: 
             if st.button("◀️ ย้อนกลับ"): 
@@ -349,5 +347,4 @@ else:
     else:
         st.info("ไม่มีข้อมูลรูปภาพใน Gallery")
 
-# Footer
 st.markdown("<div style='text-align: center; margin-top: 50px; color: #aaa; font-size: 0.8rem;'>Hiragana Sensei AI System</div>", unsafe_allow_html=True)
