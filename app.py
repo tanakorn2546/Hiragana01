@@ -27,12 +27,11 @@ st.set_page_config(
     layout="centered"
 )
 
-# --- 2. CSS ตกแต่ง (UX/UI เดิม) ---
+# --- 2. CSS ตกแต่ง ---
 def local_css():
     st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;800&display=swap');
-        
         html, body, [class*="css"], [data-testid="stAppViewContainer"] {
             font-family: 'Prompt', sans-serif !important;
             color: #333333 !important;
@@ -63,41 +62,13 @@ def local_css():
             box-shadow: 0 10px 25px rgba(211, 47, 47, 0.2) !important;
             border: 5px solid #ffffff !important;
         }
-        div[role="radiogroup"] label {
-            background: linear-gradient(135deg, #e57373 0%, #D32F2F 100%) !important;
-            border: none !important;
-            padding: 10px 20px !important;
-            border-radius: 25px !important;
-            color: #ffffff !important; 
-        }
-        div[role="radiogroup"] label:hover {
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 10px rgba(211, 47, 47, 0.3) !important;
-        }
-        .stRadio > label {
-            color: #D32F2F !important;
-            font-weight: 800 !important;
-            font-size: 1.3rem !important;
-        }
-        div.stButton > button {
-            background: linear-gradient(135deg, #ef5350 0%, #c62828 100%) !important;
-            color: #ffffff !important;
-            border: none !important;
-            border-radius: 15px !important;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2) !important;
-        }
-        div.stButton > button:hover {
-            transform: translateY(-2px) !important;
-            box-shadow: 0 6px 15px rgba(198, 40, 40, 0.4) !important;
-        }
-        div[data-testid="stImage"] > img {
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
-            border: 2px solid #ffcdd2;
-        }
-        h1 { 
-            text-align: center; color: #D32F2F !important; 
-            font-weight: 800 !important; font-size: 2.2rem !important;
+        .result-teacher-box {
+            background: #FFEBEE; 
+            padding: 20px; 
+            border-radius: 15px; 
+            border: 2px solid #D32F2F; 
+            text-align: center; 
+            margin-top: 20px;
         }
         .custom-home-btn {
             background: linear-gradient(135deg, #424242 0%, #212121 100%);
@@ -110,14 +81,6 @@ def local_css():
             transition: all 0.3s ease;
             text-align: center;
             width: 100%;
-        }
-        .result-teacher-box {
-            background: #FFEBEE; 
-            padding: 20px; 
-            border-radius: 15px; 
-            border: 2px solid #D32F2F; 
-            text-align: center; 
-            margin-top: 20px;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -133,20 +96,17 @@ def init_connection():
         database="cedubruc_hiragana_app"
     )
 
-# ฟังก์ชันเดิม (สำหรับโหมดดูรูปทั่วไป)
 def get_image_list(filter_mode):
     try:
         conn = init_connection()
         cursor = conn.cursor()
         table_name = "culantro_images" 
-        
         if "ยังไม่ตรวจ" in filter_mode:
             sql = f"SELECT id, image_name, prediction_result FROM {table_name} WHERE prediction_result IS NULL ORDER BY id ASC"
         elif "ตรวจแล้ว" in filter_mode:
             sql = f"SELECT id, image_name, prediction_result FROM {table_name} WHERE prediction_result IS NOT NULL ORDER BY id DESC"
         else:
             sql = f"SELECT id, image_name, prediction_result FROM {table_name} ORDER BY id DESC"
-        
         cursor.execute(sql)
         data = cursor.fetchall()
         conn.close()
@@ -178,7 +138,6 @@ def update_database(img_id, result, confidence):
         return True
     except: return False
 
-# 🆕 ฟังก์ชันใหม่สำหรับ Teacher Mode (อัปเดต table progress)
 def update_student_progress(work_id, ai_result, confidence):
     try:
         conn = init_connection()
@@ -192,13 +151,20 @@ def update_student_progress(work_id, ai_result, confidence):
         st.error(f"DB Error: {e}")
         return False
 
-# --- 4. Smart Model Loader ---
+# --- 4. Smart Model Loader & FIX ---
+
+# 🔥 นี่คือ Class ฮีโร่ที่จะช่วยแก้ปัญหา Version เก่าครับ 🔥
+class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
+    def __init__(self, **kwargs):
+        kwargs.pop('groups', None) # ลบคำสั่ง groups ทิ้งไปเลย ถ้า Server ไม่รู้จัก
+        super().__init__(**kwargs)
+
 if hasattr(st, 'cache_resource'): cache_decorator = st.cache_resource
 else: cache_decorator = st.experimental_singleton
 
 @cache_decorator
 def load_model():
-    file_id = '1XdUxY4y5KLhBEKwnMKC5Y6LE0ShSlx6X' 
+    file_id = '1ezDUsDxeabZX06ArdjtcWPk0uradYWDD' 
     model_name = 'hiragana_mobilenetv2_best.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     
@@ -216,12 +182,16 @@ def load_model():
                 return None
 
     try:
-        return tf.keras.models.load_model(model_name, compile=False)
+        # 🔥 เรียกใช้ Class ฮีโร่ที่นี่ 🔥
+        return tf.keras.models.load_model(
+            model_name, 
+            compile=False, 
+            custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D}
+        )
     except Exception as e:
         st.error(f"❌ ไฟล์โมเดลเสียหาย: {e}")
         return None
 
-# Smart Class Loader
 def load_class_names():
     json_name = 'class_indices.json'
     possible_paths = [json_name, os.path.join('saved_models', json_name)]
@@ -249,7 +219,6 @@ def load_class_names():
             'wa', 'wo', 'n'
         ]
 
-# ฟังก์ชันทำนายผล
 def import_and_predict(image_data, model, class_names):
     size = (224, 224) 
     image = ImageOps.fit(image_data, size, Image.Resampling.LANCZOS)
@@ -295,56 +264,40 @@ st.markdown("""
 # 🚦 LOGIC SWITCH: แก้ไขให้รองรับทุกเวอร์ชัน (Old & New)
 # =========================================================
 try:
-    # สำหรับ Streamlit รุ่นใหม่ (1.30+)
     query_params = st.query_params
     target_work_id = query_params.get("work_id", None)
     target_image_url = query_params.get("image_url", None)
 except AttributeError:
-    # สำหรับ Streamlit รุ่นเก่า (Fix: ใช้ experimental_get_query_params)
     query_params = st.experimental_get_query_params()
     target_work_id = query_params.get("work_id", [None])[0]
     target_image_url = query_params.get("image_url", [None])[0]
 
-# --- เริ่มตรวจสอบ Logic ---
 if target_work_id and target_image_url:
-    # -----------------------------------------------
-    # 🎯 โหมด Teacher (UI ใหม่ที่แทรกเข้ามา)
-    # -----------------------------------------------
     st.markdown(f"<h3 style='text-align:center; color:#555;'>📋 กำลังตรวจงาน ID: {target_work_id}</h3>", unsafe_allow_html=True)
     
     try:
-        # -------------------------------------------------------------
-        # ✅ FIX: ปลอมตัวเป็น Browser เพื่อไม่ให้เซิร์ฟเวอร์บล็อกรูปภาพ
-        # -------------------------------------------------------------
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Referer': 'https://www.cedubru.com/'
         }
         
-        # เพิ่ม timeout และ headers
         response = requests.get(target_image_url, headers=headers, timeout=15)
         
-        # ตรวจสอบสถานะการโหลด
         if response.status_code == 200:
             img = Image.open(io.BytesIO(response.content))
-            
             col1, col2 = st.columns([1, 1.2])
             with col1:
                 st.image(img, caption="รูปจากนักเรียน", use_column_width=True)
-            
             with col2:
                 if model:
                     with st.spinner("AI กำลังวิเคราะห์..."):
                         result, conf = import_and_predict(img, model, class_names)
-                        
                         st.markdown(f"""
                         <div class="result-teacher-box">
                             <h1 style="color: #D32F2F; margin: 0; font-size: 3rem;">{result}</h1>
                             <p style="color: #555;">ความมั่นใจ: <strong>{conf:.2f}%</strong></p>
                         </div>
                         """, unsafe_allow_html=True)
-                        
-                        # ปุ่มบันทึก (UX แบบปุ่มใหญ่)
                         if st.button("💾 บันทึกผลการตรวจลงระบบ", type="primary", use_container_width=True):
                             if update_student_progress(target_work_id, result, conf):
                                 st.success("✅ บันทึกผลเรียบร้อย! คุณสามารถปิดหน้านี้ได้")
@@ -362,46 +315,32 @@ if target_work_id and target_image_url:
 
 else:
     # -----------------------------------------------
-    # 📂 โหมดเดิม (Default Mode: culantro_images)
+    # 📂 โหมดเดิม (Default Mode)
     # -----------------------------------------------
-    # ตัวกรอง
     st.markdown("<p style='text-align: center; color: #555;'>ระบบจำแนกตัวอักษรฮิรางานะ (MobileNetV2)</p>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([0.1, 3, 0.1])
     with c2:
-        filter_option = st.radio(
-            "📂 เลือกดูข้อมูล:", 
-            ["ทั้งหมด (All)", "ตรวจแล้ว (Analyzed)", "ยังไม่ตรวจ (Pending)"], 
-        )
+        filter_option = st.radio("📂 เลือกดูข้อมูล:", ["ทั้งหมด (All)", "ตรวจแล้ว (Analyzed)", "ยังไม่ตรวจ (Pending)"])
 
     image_list = get_image_list(filter_option)
 
     if len(image_list) > 0:
         id_list = [row[0] for row in image_list]
-        
-        if 'current_index' not in st.session_state:
-            st.session_state.current_index = 0
-        if st.session_state.current_index >= len(id_list):
-            st.session_state.current_index = 0
-
+        if 'current_index' not in st.session_state: st.session_state.current_index = 0
+        if st.session_state.current_index >= len(id_list): st.session_state.current_index = 0
         current_id = id_list[st.session_state.current_index]
         
         st.markdown("---")
         st.markdown(f"<div style='text-align: center; color: #333; margin-bottom: 15px; background: #FFEBEE; padding: 10px; border-radius: 10px;'>📝 รูปที่ {st.session_state.current_index + 1} / {len(id_list)} (ID: {current_id})</div>", unsafe_allow_html=True)
 
         data_row = get_image_data(current_id)
-        
         if data_row:
             blob_data, saved_result, saved_conf = data_row
             image = Image.open(io.BytesIO(blob_data))
-            
             col_img, col_act = st.columns([1, 1])
-            
-            with col_img:
-                st.image(image, use_column_width=True)
-            
+            with col_img: st.image(image, use_column_width=True)
             with col_act:
                 st.markdown("### ผลลัพธ์ AI")
-                
                 if saved_result:
                     st.markdown(f"""
                         <div style="background-color: #FFEBEE; padding: 20px; border-radius: 15px; border: 2px solid #D32F2F; margin-bottom: 20px; text-align: center;">
@@ -409,11 +348,9 @@ else:
                             <p style="margin-top: 10px; font-size: 1rem; color: #555;">ความมั่นใจ: <strong>{saved_conf:.2f}%</strong></p>
                         </div>
                     """, unsafe_allow_html=True)
-                    
                     if st.button("🔄 ตรวจสอบใหม่"):
                         update_database(current_id, None, 0)
                         st.experimental_rerun()
-                
                 else:
                     st.info("⚠️ ยังไม่ได้ระบุตัวอักษร")
                     if st.button("🇯🇵 อ่านตัวอักษรนี้"):
@@ -424,19 +361,15 @@ else:
                                 st.success(f"อ่านได้ว่า: {result}")
                                 time.sleep(0.5)
                                 st.experimental_rerun()
-                        else:
-                            st.error("ไม่พบโมเดล")
+                        else: st.error("ไม่พบโมเดล")
 
-        # ปุ่มนำทาง
         st.markdown("<br>", unsafe_allow_html=True) 
         c_prev, c_empty, c_next = st.columns([1, 0.2, 1]) 
-        
         with c_prev:
             if st.session_state.current_index > 0:
                 if st.button("◀️ ย้อนกลับ"):
                     st.session_state.current_index -= 1
                     st.experimental_rerun()
-        
         with c_next:
             if st.session_state.current_index < len(id_list) - 1:
                 if st.button("ถัดไป ▶️"):
@@ -446,11 +379,9 @@ else:
                  if st.button("🔄 กลับไปรูปแรก"):
                     st.session_state.current_index = 0
                     st.experimental_rerun()
-
     else:
         st.warning("ยังไม่มีข้อมูลรูปภาพในระบบ")
 
-    # Link กลับเว็บหลัก
     base_url = "http://www.your-school-website.com/" 
     st.markdown(f"""
         <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
