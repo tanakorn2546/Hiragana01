@@ -128,7 +128,7 @@ def get_image_list(filter_mode):
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        table_name = "culantro_images" 
+        table_name = "progress" 
         
         if "ยังไม่ตรวจ" in filter_mode:
             sql = f"SELECT id, image_name, prediction_result FROM {table_name} WHERE prediction_result IS NULL ORDER BY id ASC"
@@ -149,7 +149,7 @@ def get_image_data(img_id):
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        table_name = "progress"
+        table_name = "culantro_images"
         cursor.execute(f"SELECT image_data, prediction_result, confidence FROM {table_name} WHERE id = %s", (img_id,))
         data = cursor.fetchone()
         conn.close()
