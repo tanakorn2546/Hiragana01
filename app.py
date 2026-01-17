@@ -18,46 +18,18 @@ with open(os.path.join(config_dir, "config.toml"), "w") as f:
 
 st.set_page_config(page_title="Hiragana Sensei AI", page_icon="🇯🇵", layout="centered")
 
-# --- CSS ตกแต่ง ---
-def local_css():
-    st.markdown("""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;800&display=swap');
-        html, body, [class*="css"], [data-testid="stAppViewContainer"] {
-            font-family: 'Prompt', sans-serif !important;
-            color: #333333 !important;
-        }
-        .stApp {
-            background: linear-gradient(135deg, #FFEFBA 0%, #FFFFFF 100%) !important;
-            background-attachment: fixed !important;
-        }
-        div.block-container {
-            background-color: rgba(255, 255, 255, 0.95) !important;
-            border-radius: 30px !important;
-            padding: 2rem;
-            box-shadow: 0 15px 50px rgba(0,0,0,0.1) !important;
-            border-top: 5px solid #D32F2F;
-        }
-        .app-header-icon {
-            font-size: 80px; background: radial-gradient(circle, #ffcdd2 0%, #ffffff 100%);
-            width: 140px; height: 140px; border-radius: 50%; display: flex;
-            align-items: center; justify-content: center; margin: 0 auto 15px auto;
-            box-shadow: 0 10px 25px rgba(211, 47, 47, 0.2); border: 5px solid #ffffff;
-        }
-        .result-teacher-box {
-            background: #FFEBEE; padding: 20px; border-radius: 15px; 
-            border: 2px solid #D32F2F; text-align: center; margin-top: 20px;
-        }
-        .custom-home-btn {
-            background: linear-gradient(135deg, #424242 0%, #212121 100%); color: #ffffff !important;
-            text-decoration: none; padding: 0.8rem 2rem; border-radius: 15px; display: inline-block;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s ease; width: 100%; text-align: center;
-        }
-        h1 { text-align: center; color: #D32F2F; font-weight: 800; }
-    </style>
-    """, unsafe_allow_html=True)
-
-local_css()
+# --- CSS ---
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;800&display=swap');
+    html, body, [class*="css"] { font-family: 'Prompt', sans-serif !important; color: #333; }
+    .stApp { background: linear-gradient(135deg, #FFEFBA 0%, #FFFFFF 100%); background-attachment: fixed; }
+    div.block-container { background: rgba(255, 255, 255, 0.95); border-radius: 30px; padding: 2rem; box-shadow: 0 15px 50px rgba(0,0,0,0.1); border-top: 5px solid #D32F2F; }
+    h1 { text-align: center; color: #D32F2F; font-weight: 800; }
+    .result-teacher-box { background: #FFEBEE; padding: 20px; border-radius: 15px; border: 2px solid #D32F2F; text-align: center; margin-top: 20px; }
+    .custom-home-btn { background: linear-gradient(135deg, #424242 0%, #212121 100%); color: #ffffff !important; text-decoration: none; padding: 0.8rem 2rem; border-radius: 15px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.2); width: 100%; text-align: center; }
+</style>
+""", unsafe_allow_html=True)
 
 # --- Database ---
 def init_connection():
@@ -68,7 +40,7 @@ def init_connection():
         database="cedubruc_hiragana_app"
     )
 
-# ฟังก์ชันอัปเดตของ Teacher Mode (ตาราง progress)
+# อัปเดตคะแนนนักเรียน (Teacher Mode)
 def update_student_progress(work_id, ai_result, confidence):
     try:
         conn = init_connection()
@@ -80,7 +52,7 @@ def update_student_progress(work_id, ai_result, confidence):
         return True
     except: return False
 
-# ฟังก์ชันอัปเดตของโหมดเดิม (ตาราง culantro_images)
+# อัปเดตคลังภาพ (Standard Mode)
 def update_database(img_id, result, confidence):
     try:
         conn = init_connection()
@@ -116,10 +88,10 @@ def get_image_data(img_id):
         return data 
     except: return None
 
-# --- 🛠️ FIX MODEL: แก้ปัญหา Version เก่า ---
+# --- 🛠️ MAGIC FIX: Class แก้บั๊กโมเดล (สำคัญมาก ห้ามลบ!) ---
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, **kwargs):
-        kwargs.pop('groups', None) # ลบคำสั่งที่ Server ไม่รู้จักทิ้ง
+        kwargs.pop('groups', None) # ลบคำสั่ง groups ทิ้ง เพื่อไม่ให้ Server พัง
         super().__init__(**kwargs)
 
 @st.cache_resource
@@ -133,9 +105,9 @@ def load_model():
         except: return None
 
     try:
-        # ยัดไส้ Class แก้บั๊กเข้าไป
+        # โหลดโมเดลโดยใช้ Class พิเศษ
         return tf.keras.models.load_model(model_name, compile=False, custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D})
-    except: return None
+    except Exception as e: return None
 
 def import_and_predict(image_data, model):
     class_names = ['a', 'i', 'u', 'e', 'o', 'ka', 'ki', 'ku', 'ke', 'ko', 'sa', 'shi', 'su', 'se', 'so', 'ta', 'chi', 'tsu', 'te', 'to', 'na', 'ni', 'nu', 'ne', 'no', 'ha', 'hi', 'fu', 'he', 'ho', 'ma', 'mi', 'mu', 'me', 'mo', 'ya', 'yu', 'yo', 'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'n']
@@ -161,7 +133,7 @@ try:
     work_id = qp.get("work_id")
     img_url = qp.get("image_url")
 except:
-    # Fallback สำหรับ Streamlit รุ่นเก่า
+    # Fallback รุ่นเก่า
     qp = st.experimental_get_query_params()
     work_id = qp.get("work_id", [None])[0]
     img_url = qp.get("image_url", [None])[0]
@@ -172,8 +144,8 @@ if work_id and img_url:
     # ================================
     st.markdown(f"<h3 style='text-align:center; color:#555;'>📋 กำลังตรวจงาน ID: {work_id}</h3>", unsafe_allow_html=True)
     try:
-        # หลอก Server ว่าเป็น Chrome
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36', 'Referer': 'https://www.cedubru.com/'}
+        # Headers สำคัญมาก! ต้องมีเพื่อหลอก Server โรงเรียน
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(img_url, headers=headers, timeout=15)
         
         if response.status_code == 200:
@@ -189,7 +161,7 @@ if work_id and img_url:
                             if update_student_progress(work_id, result, conf):
                                 st.success("✅ บันทึกเรียบร้อย!"); st.balloons()
                             else: st.error("บันทึกผิดพลาด")
-                else: st.error("Model Error")
+                else: st.error("Model Error: โหลดโมเดลไม่ได้")
         else: st.error(f"❌ โหลดรูปไม่ได้ (Code: {response.status_code})")
     except Exception as e: st.error(f"Error: {e}")
 
@@ -241,4 +213,5 @@ else:
             
     else: st.warning("ไม่มีข้อมูลรูปภาพ")
 
-    st.markdown(f"""<div style="text-align: center; margin-top: 30px;"><a href="http://www.your-school-website.com/" target="_blank" class="custom-home-btn">🏠 กลับสู่หน้าบทเรียน</a></div>""", unsafe_allow_html=True)
+    base_url = "http://www.your-school-website.com/" 
+    st.markdown(f"""<div style="text-align: center; margin-top: 30px;"><a href="{base_url}" target="_blank" class="custom-home-btn">🏠 กลับสู่หน้าบทเรียน</a></div>""", unsafe_allow_html=True)
