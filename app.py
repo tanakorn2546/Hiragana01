@@ -7,7 +7,7 @@ import os
 import mysql.connector
 import io
 import json
-import gdown # 📦 ต้องติดตั้ง pip install gdown ก่อนใช้งาน
+import gdown
 
 # --- [Config] ธีมญี่ปุ่น (ขาว-แดง-ชมพู) ---
 config_dir = ".streamlit"
@@ -115,18 +115,26 @@ def local_css():
 
 local_css()
 
-# --- 3. Database ---
+# --- 3. Database (แก้ไข: ใช้ st.secrets) ---
 def init_connection():
-    return mysql.connector.connect(
-        host="www.cedubru.com",
-        user="cedubruc_hiragana_app",
-        password="7gZ8gDJyufzJyzELZkdg",
-        database="cedubruc_hiragana_app"
-    )
+    try:
+        # พยายามดึงค่าจาก secrets.toml ก่อน (ปลอดภัยกว่า)
+        return mysql.connector.connect(
+            host=st.secrets["mysql"]["host"],
+            user=st.secrets["mysql"]["user"],
+            password=st.secrets["mysql"]["password"],
+            database=st.secrets["mysql"]["database"]
+        )
+    except Exception:
+        # Fallback: กรณีลืมสร้างไฟล์ secrets (ไม่แนะนำสำหรับ Production)
+        st.error("⚠️ ไม่พบไฟล์ secrets.toml กรุณาสร้างไฟล์ตามขั้นตอน")
+        return None
 
 def get_image_list(filter_mode):
     try:
         conn = init_connection()
+        if conn is None: return []
+        
         cursor = conn.cursor()
         table_name = "culantro_images" 
         
@@ -148,6 +156,8 @@ def get_image_list(filter_mode):
 def get_image_data(img_id):
     try:
         conn = init_connection()
+        if conn is None: return None
+        
         cursor = conn.cursor()
         table_name = "culantro_images"
         cursor.execute(f"SELECT image_data, prediction_result, confidence FROM {table_name} WHERE id = %s", (img_id,))
@@ -159,6 +169,8 @@ def get_image_data(img_id):
 def update_database(img_id, result, confidence):
     try:
         conn = init_connection()
+        if conn is None: return False
+        
         cursor = conn.cursor()
         table_name = "culantro_images"
         sql = f"UPDATE {table_name} SET prediction_result = %s, confidence = %s WHERE id = %s"
@@ -168,37 +180,28 @@ def update_database(img_id, result, confidence):
         return True
     except: return False
 
-# --- 4. Smart Model Loader (แก้ไข: รองรับ Google Drive) ---
-if hasattr(st, 'cache_resource'): cache_decorator = st.cache_resource
-else: cache_decorator = st.experimental_singleton
-
-@cache_decorator
+# --- 4. Smart Model Loader ---
+@st.cache_resource
 def load_model():
-    # -------------------------------------------------------------
-    # 🔥 [แก้ไข] ใส่ Google Drive File ID ของคุณตรงนี้ (สำคัญ!) 🔥
+    # File ID จาก Google Drive
     file_id = '1XdUxY4y5KLhBEKwnMKC5Y6LE0ShSlx6X' 
-    # -------------------------------------------------------------
     
     model_name = 'hiragana_mobilenetv2_best.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     
-    # 1. เช็คว่ามีไฟล์อยู่ในโฟลเดอร์ปัจจุบันหรือไม่
     if not os.path.exists(model_name):
-        # 2. ถ้าไม่มี ลองเช็คในโฟลเดอร์ saved_models
         local_path = os.path.join('saved_models', model_name)
         if os.path.exists(local_path):
             model_name = local_path
         else:
-            # 3. ถ้าไม่มีเลย ให้ดาวน์โหลดจาก Google Drive
             st.warning("📥 กำลังดาวน์โหลด Model จาก Google Drive... (ใช้เวลาสักครู่)")
             try:
                 gdown.download(url, model_name, quiet=False)
                 st.success("✅ ดาวน์โหลด Model สำเร็จ!")
             except Exception as e:
-                st.error(f"❌ ดาวน์โหลดไม่สำเร็จ: {e} (ตรวจสอบ File ID และ Permission 'Anyone with the link')")
+                st.error(f"❌ ดาวน์โหลดไม่สำเร็จ: {e}")
                 return None
 
-    # โหลด Model
     try:
         return tf.keras.models.load_model(model_name, compile=False)
     except Exception as e:
@@ -208,11 +211,7 @@ def load_model():
 # --- Smart Class Loader ---
 def load_class_names():
     json_name = 'class_indices.json'
-    
-    possible_paths = [
-        json_name,
-        os.path.join('saved_models', json_name)
-    ]
+    possible_paths = [json_name, os.path.join('saved_models', json_name)]
     
     found_path = None
     for p in possible_paths:
@@ -226,31 +225,22 @@ def load_class_names():
         sorted_classes = [k for k, v in sorted(class_indices.items(), key=lambda item: item[1])]
         return sorted_classes
     else:
-        st.warning("⚠️ ไม่พบไฟล์ class_indices.json ใช้ค่า Default")
+        # Default classes
         return [
-            'a', 'i', 'u', 'e', 'o',
-            'ka', 'ki', 'ku', 'ke', 'ko',
-            'sa', 'shi', 'su', 'se', 'so',
-            'ta', 'chi', 'tsu', 'te', 'to',
-            'na', 'ni', 'nu', 'ne', 'no',
-            'ha', 'hi', 'fu', 'he', 'ho',
-            'ma', 'mi', 'mu', 'me', 'mo',
-            'ya', 'yu', 'yo',
-            'ra', 'ri', 'ru', 're', 'ro',
-            'wa', 'wo', 'n'
+            'a', 'i', 'u', 'e', 'o', 'ka', 'ki', 'ku', 'ke', 'ko',
+            'sa', 'shi', 'su', 'se', 'so', 'ta', 'chi', 'tsu', 'te', 'to',
+            'na', 'ni', 'nu', 'ne', 'no', 'ha', 'hi', 'fu', 'he', 'ho',
+            'ma', 'mi', 'mu', 'me', 'mo', 'ya', 'yu', 'yo',
+            'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'n'
         ]
 
-# ฟังก์ชันทำนายผล
 def import_and_predict(image_data, model):
     size = (224, 224) 
     image = ImageOps.fit(image_data, size, Image.Resampling.LANCZOS)
-    
     if image.mode != "RGB":
         image = image.convert("RGB")
-        
     img_array = np.asarray(image).astype(np.float32)
     img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
-
     data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
     data[0] = img_array
     return model.predict(data)
@@ -314,7 +304,7 @@ if len(image_list) > 0:
                 
                 if st.button("🔄 ตรวจสอบใหม่"):
                     update_database(current_id, None, 0)
-                    st.experimental_rerun()
+                    st.rerun() # --- [แก้ไข] ใช้ st.rerun() ---
             
             else:
                 st.info("⚠️ ยังไม่ได้ระบุตัวอักษร")
@@ -349,7 +339,7 @@ if len(image_list) > 0:
                                 update_database(current_id, final_res, conf)
                                 st.success(f"อ่านได้ว่า: {final_res}")
                                 time.sleep(0.5)
-                                st.experimental_rerun()
+                                st.rerun() # --- [แก้ไข] ใช้ st.rerun() ---
 
                             except Exception as e:
                                 st.error(f"💥 เกิดข้อผิดพลาด: {e}")
@@ -359,8 +349,7 @@ if len(image_list) > 0:
                 # --- Batch Process ---
                 if "ยังไม่ตรวจ" in filter_option:
                     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-                    if st.button(f"⚡ อ่านลายมือทั้งหมด ({len(image_list)} รูป)"):
-                         pass 
+                    # ปุ่ม Batch ยังไม่ได้ทำฟังก์ชันใส่ไว้ (pass)
 
     # --- ปุ่มนำทาง ---
     st.markdown("<br>", unsafe_allow_html=True) 
@@ -370,17 +359,17 @@ if len(image_list) > 0:
         if st.session_state.current_index > 0:
             if st.button("◀️ ย้อนกลับ"):
                 st.session_state.current_index -= 1
-                st.experimental_rerun()
+                st.rerun() # --- [แก้ไข] ใช้ st.rerun() ---
             
     with c_next:
         if st.session_state.current_index < len(id_list) - 1:
             if st.button("ถัดไป ▶️"):
                 st.session_state.current_index += 1
-                st.experimental_rerun()
+                st.rerun() # --- [แก้ไข] ใช้ st.rerun() ---
         else:
              if st.button("🔄 กลับไปรูปแรก"):
                 st.session_state.current_index = 0
-                st.experimental_rerun()
+                st.rerun() # --- [แก้ไข] ใช้ st.rerun() ---
 
 else:
     st.warning("ยังไม่มีข้อมูลรูปภาพในระบบ")
