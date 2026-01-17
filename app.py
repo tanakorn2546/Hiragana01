@@ -313,36 +313,52 @@ if target_work_id and target_image_url:
     st.markdown(f"<h3 style='text-align:center; color:#555;'>📋 กำลังตรวจงาน ID: {target_work_id}</h3>", unsafe_allow_html=True)
     
     try:
-        response = requests.get(target_image_url)
-        img = Image.open(io.BytesIO(response.content))
+        # -------------------------------------------------------------
+        # ✅ FIX: ปลอมตัวเป็น Browser เพื่อไม่ให้เซิร์ฟเวอร์บล็อกรูปภาพ
+        # -------------------------------------------------------------
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': 'https://www.cedubru.com/'
+        }
         
-        col1, col2 = st.columns([1, 1.2])
-        with col1:
-            st.image(img, caption="รูปจากนักเรียน", use_column_width=True)
+        # เพิ่ม timeout และ headers
+        response = requests.get(target_image_url, headers=headers, timeout=15)
         
-        with col2:
-            if model:
-                with st.spinner("AI กำลังวิเคราะห์..."):
-                    result, conf = import_and_predict(img, model, class_names)
-                    
-                    st.markdown(f"""
-                    <div class="result-teacher-box">
-                        <h1 style="color: #D32F2F; margin: 0; font-size: 3rem;">{result}</h1>
-                        <p style="color: #555;">ความมั่นใจ: <strong>{conf:.2f}%</strong></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # ปุ่มบันทึก (UX แบบปุ่มใหญ่)
-                    if st.button("💾 บันทึกผลการตรวจลงระบบ", type="primary", use_container_width=True):
-                        if update_student_progress(target_work_id, result, conf):
-                            st.success("✅ บันทึกผลเรียบร้อย! คุณสามารถปิดหน้านี้ได้")
-                            st.balloons()
-                        else:
-                            st.error("เกิดข้อผิดพลาดในการบันทึก")
-            else:
-                st.error("Model Error")
+        # ตรวจสอบสถานะการโหลด
+        if response.status_code == 200:
+            img = Image.open(io.BytesIO(response.content))
+            
+            col1, col2 = st.columns([1, 1.2])
+            with col1:
+                st.image(img, caption="รูปจากนักเรียน", use_column_width=True)
+            
+            with col2:
+                if model:
+                    with st.spinner("AI กำลังวิเคราะห์..."):
+                        result, conf = import_and_predict(img, model, class_names)
+                        
+                        st.markdown(f"""
+                        <div class="result-teacher-box">
+                            <h1 style="color: #D32F2F; margin: 0; font-size: 3rem;">{result}</h1>
+                            <p style="color: #555;">ความมั่นใจ: <strong>{conf:.2f}%</strong></p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # ปุ่มบันทึก (UX แบบปุ่มใหญ่)
+                        if st.button("💾 บันทึกผลการตรวจลงระบบ", type="primary", use_container_width=True):
+                            if update_student_progress(target_work_id, result, conf):
+                                st.success("✅ บันทึกผลเรียบร้อย! คุณสามารถปิดหน้านี้ได้")
+                                st.balloons()
+                            else:
+                                st.error("เกิดข้อผิดพลาดในการบันทึก")
+                else:
+                    st.error("Model Error: ไม่สามารถโหลดโมเดลได้")
+        else:
+            st.error(f"❌ ดาวน์โหลดรูปภาพไม่สำเร็จ (Status Code: {response.status_code})")
+            st.warning("เซิร์ฟเวอร์โรงเรียนอาจบล็อกการเข้าถึง กรุณาลองใหม่")
+            
     except Exception as e:
-        st.error(f"ไม่สามารถโหลดรูปภาพได้: {e}")
+        st.error(f"เกิดข้อผิดพลาดในการโหลดรูป: {e}")
 
 else:
     # -----------------------------------------------
