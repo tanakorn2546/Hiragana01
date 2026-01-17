@@ -1,6 +1,8 @@
 streamlit>=1.32.0
-requests
-mysql-connector-python
 tensorflow-cpu
+mysql-connector-python
 Pillow
 gdown
+requests
+numpy
+protobuf!=4.24.0,>=3.19.6
