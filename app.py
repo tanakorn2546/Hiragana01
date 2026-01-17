@@ -10,84 +10,28 @@ import json
 import gdown 
 import requests 
 
-# --- [Config] ธีมญี่ปุ่น (ขาว-แดง-ชมพู) ---
+# --- [Config] ---
 config_dir = ".streamlit"
-config_path = os.path.join(config_dir, "config.toml")
-
-if not os.path.exists(config_dir):
-    os.makedirs(config_dir)
-
-with open(config_path, "w") as f:
+if not os.path.exists(config_dir): os.makedirs(config_dir)
+with open(os.path.join(config_dir, "config.toml"), "w") as f:
     f.write('[theme]\nbase="light"\nprimaryColor="#D32F2F"\nbackgroundColor="#FFFFFF"\nsecondaryBackgroundColor="#FFF0F5"\ntextColor="#333333"\n')
 
-# --- 1. ตั้งค่าหน้าเว็บ ---
-st.set_page_config(
-    page_title="Hiragana Sensei AI",
-    page_icon="🇯🇵",
-    layout="centered"
-)
+st.set_page_config(page_title="Hiragana Sensei AI", page_icon="🇯🇵", layout="centered")
 
-# --- 2. CSS ตกแต่ง ---
-def local_css():
-    st.markdown("""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;800&display=swap');
-        html, body, [class*="css"], [data-testid="stAppViewContainer"] {
-            font-family: 'Prompt', sans-serif !important;
-            color: #333333 !important;
-        }
-        .stApp {
-            background: linear-gradient(135deg, #FFEFBA 0%, #FFFFFF 100%) !important;
-            background-attachment: fixed !important;
-            background-size: cover !important;
-        }
-        div.block-container {
-            background-color: rgba(255, 255, 255, 0.95) !important;
-            border-radius: 30px !important;
-            padding: 2rem 2rem 4rem 2rem !important; 
-            margin-top: 2rem !important;
-            box-shadow: 0 15px 50px rgba(0,0,0,0.1) !important;
-            border-top: 5px solid #D32F2F;
-        }
-        .app-header-icon {
-            font-size: 80px !important;
-            background: radial-gradient(circle, #ffcdd2 0%, #ffffff 100%) !important;
-            width: 140px !important;
-            height: 140px !important;
-            border-radius: 50% !important;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 15px auto !important;
-            box-shadow: 0 10px 25px rgba(211, 47, 47, 0.2) !important;
-            border: 5px solid #ffffff !important;
-        }
-        .result-teacher-box {
-            background: #FFEBEE; 
-            padding: 20px; 
-            border-radius: 15px; 
-            border: 2px solid #D32F2F; 
-            text-align: center; 
-            margin-top: 20px;
-        }
-        .custom-home-btn {
-            background: linear-gradient(135deg, #424242 0%, #212121 100%);
-            color: #ffffff !important;
-            text-decoration: none;
-            padding: 0.8rem 2rem;
-            border-radius: 15px;
-            display: inline-block;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            transition: all 0.3s ease;
-            text-align: center;
-            width: 100%;
-        }
-    </style>
-    """, unsafe_allow_html=True)
+# --- CSS ---
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;800&display=swap');
+    html, body, [class*="css"] { font-family: 'Prompt', sans-serif !important; color: #333; }
+    .stApp { background: linear-gradient(135deg, #FFEFBA 0%, #FFFFFF 100%); background-attachment: fixed; }
+    div.block-container { background: rgba(255, 255, 255, 0.95); border-radius: 30px; padding: 2rem; box-shadow: 0 15px 50px rgba(0,0,0,0.1); border-top: 5px solid #D32F2F; }
+    h1 { text-align: center; color: #D32F2F; font-weight: 800; }
+    .result-box { background: #FFEBEE; padding: 20px; border-radius: 15px; border: 2px solid #D32F2F; text-align: center; margin-top: 20px; }
+    .custom-btn { background: #333; color: white; text-decoration: none; padding: 10px 20px; border-radius: 10px; }
+</style>
+""", unsafe_allow_html=True)
 
-local_css()
-
-# --- 3. Database ---
+# --- Database ---
 def init_connection():
     return mysql.connector.connect(
         host="www.cedubru.com",
@@ -95,48 +39,6 @@ def init_connection():
         password="7gZ8gDJyufzJyzELZkdg",
         database="cedubruc_hiragana_app"
     )
-
-def get_image_list(filter_mode):
-    try:
-        conn = init_connection()
-        cursor = conn.cursor()
-        table_name = "culantro_images" 
-        if "ยังไม่ตรวจ" in filter_mode:
-            sql = f"SELECT id, image_name, prediction_result FROM {table_name} WHERE prediction_result IS NULL ORDER BY id ASC"
-        elif "ตรวจแล้ว" in filter_mode:
-            sql = f"SELECT id, image_name, prediction_result FROM {table_name} WHERE prediction_result IS NOT NULL ORDER BY id DESC"
-        else:
-            sql = f"SELECT id, image_name, prediction_result FROM {table_name} ORDER BY id DESC"
-        cursor.execute(sql)
-        data = cursor.fetchall()
-        conn.close()
-        return data
-    except Exception as e:
-        st.error(f"❌ DB Error: {e}")
-        return []
-
-def get_image_data(img_id):
-    try:
-        conn = init_connection()
-        cursor = conn.cursor()
-        table_name = "culantro_images"
-        cursor.execute(f"SELECT image_data, prediction_result, confidence FROM {table_name} WHERE id = %s", (img_id,))
-        data = cursor.fetchone()
-        conn.close()
-        return data 
-    except: return None
-
-def update_database(img_id, result, confidence):
-    try:
-        conn = init_connection()
-        cursor = conn.cursor()
-        table_name = "culantro_images"
-        sql = f"UPDATE {table_name} SET prediction_result = %s, confidence = %s WHERE id = %s"
-        cursor.execute(sql, (result, float(confidence), img_id))
-        conn.commit()
-        conn.close()
-        return True
-    except: return False
 
 def update_student_progress(work_id, ai_result, confidence):
     try:
@@ -147,246 +49,82 @@ def update_student_progress(work_id, ai_result, confidence):
         conn.commit()
         conn.close()
         return True
-    except Exception as e:
-        st.error(f"DB Error: {e}")
-        return False
+    except: return False
 
-# --- 4. Smart Model Loader & FIX ---
-
-# 🔥 นี่คือ Class ฮีโร่ที่จะช่วยแก้ปัญหา Version เก่าครับ 🔥
+# --- 🛠️ MAGIC FIX: แก้ปัญหา TensorFlow รุ่นเก่าอ่านโมเดลรุ่นใหม่ไม่ได้ ---
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, **kwargs):
-        kwargs.pop('groups', None) # ลบคำสั่ง groups ทิ้งไปเลย ถ้า Server ไม่รู้จัก
+        kwargs.pop('groups', None) # ตัดคำสั่ง groups ทิ้ง เพื่อไม่ให้ Error
         super().__init__(**kwargs)
 
-if hasattr(st, 'cache_resource'): cache_decorator = st.cache_resource
-else: cache_decorator = st.experimental_singleton
-
-@cache_decorator
+@st.cache_resource
 def load_model():
     file_id = '1ezDUsDxeabZX06ArdjtcWPk0uradYWDD' 
     model_name = 'hiragana_mobilenetv2_best.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     
     if not os.path.exists(model_name):
-        local_path = os.path.join('saved_models', model_name)
-        if os.path.exists(local_path):
-            model_name = local_path
-        else:
-            st.warning("📥 กำลังดาวน์โหลด Model จาก Google Drive... (ใช้เวลาสักครู่)")
-            try:
-                gdown.download(url, model_name, quiet=False)
-                st.success("✅ ดาวน์โหลด Model สำเร็จ!")
-            except Exception as e:
-                st.error(f"❌ ดาวน์โหลดไม่สำเร็จ: {e}")
-                return None
+        try:
+            gdown.download(url, model_name, quiet=False)
+        except: return None
 
     try:
-        # 🔥 เรียกใช้ Class ฮีโร่ที่นี่ 🔥
-        return tf.keras.models.load_model(
-            model_name, 
-            compile=False, 
-            custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D}
-        )
+        # ใช้ Custom Objects เพื่อยัดไส้ Class ที่เราแก้บั๊กแล้วเข้าไป
+        return tf.keras.models.load_model(model_name, compile=False, custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D})
     except Exception as e:
-        st.error(f"❌ ไฟล์โมเดลเสียหาย: {e}")
+        st.error(f"Model Error: {e}")
         return None
 
-def load_class_names():
-    json_name = 'class_indices.json'
-    possible_paths = [json_name, os.path.join('saved_models', json_name)]
-    found_path = None
-    for p in possible_paths:
-        if os.path.exists(p):
-            found_path = p; break
-            
-    if found_path:
-        with open(found_path, 'r', encoding='utf-8') as f:
-            class_indices = json.load(f)
-        sorted_classes = [k for k, v in sorted(class_indices.items(), key=lambda item: item[1])]
-        return sorted_classes
-    else:
-        return [
-            'a', 'i', 'u', 'e', 'o',
-            'ka', 'ki', 'ku', 'ke', 'ko',
-            'sa', 'shi', 'su', 'se', 'so',
-            'ta', 'chi', 'tsu', 'te', 'to',
-            'na', 'ni', 'nu', 'ne', 'no',
-            'ha', 'hi', 'fu', 'he', 'ho',
-            'ma', 'mi', 'mu', 'me', 'mo',
-            'ya', 'yu', 'yo',
-            'ra', 'ri', 'ru', 're', 'ro',
-            'wa', 'wo', 'n'
-        ]
-
-def import_and_predict(image_data, model, class_names):
-    size = (224, 224) 
-    image = ImageOps.fit(image_data, size, Image.Resampling.LANCZOS)
-    if image.mode != "RGB": image = image.convert("RGB")
-    img_array = np.asarray(image).astype(np.float32)
-    img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
-    data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
-    data[0] = img_array
+def predict(image, model):
+    class_names = ['a', 'i', 'u', 'e', 'o', 'ka', 'ki', 'ku', 'ke', 'ko', 'sa', 'shi', 'su', 'se', 'so', 'ta', 'chi', 'tsu', 'te', 'to', 'na', 'ni', 'nu', 'ne', 'no', 'ha', 'hi', 'fu', 'he', 'ho', 'ma', 'mi', 'mu', 'me', 'mo', 'ya', 'yu', 'yo', 'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'n']
+    hiragana_map = {'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)', 'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)', 'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)', 'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)', 'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)', 'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)', 'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)', 'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)', 'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)', 'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'}
+    
+    image = ImageOps.fit(image, (224, 224), Image.Resampling.LANCZOS).convert("RGB")
+    img_array = tf.keras.applications.mobilenet_v2.preprocess_input(np.array(image, dtype=np.float32))
+    data = np.expand_dims(img_array, axis=0)
     
     preds = model.predict(data)
     idx = np.argmax(preds)
-    conf = np.max(preds) * 100
-    
-    if idx < len(class_names):
-        res_code = class_names[idx]
-    else:
-        res_code = "Unknown"
+    res_code = class_names[idx] if idx < len(class_names) else "Unknown"
+    return hiragana_map.get(res_code, res_code), np.max(preds) * 100
 
-    hiragana_map = {
-        'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
-        'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
-        'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
-        'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
-        'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
-        'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
-        'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
-        'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
-        'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-        'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
-    }
-    return hiragana_map.get(res_code, res_code), conf
-
-# --- 5. Main UI ---
+# --- MAIN ---
 model = load_model()
-class_names = load_class_names()
+st.markdown("<h1>🇯🇵 Hiragana Sensei AI</h1>", unsafe_allow_html=True)
 
-st.markdown("""
-    <div class='app-header-icon'>🇯🇵</div>
-    <h1>Hiragana Sensei AI</h1>
-""", unsafe_allow_html=True)
-
-# =========================================================
-# 🚦 LOGIC SWITCH: แก้ไขให้รองรับทุกเวอร์ชัน (Old & New)
-# =========================================================
 try:
-    query_params = st.query_params
-    target_work_id = query_params.get("work_id", None)
-    target_image_url = query_params.get("image_url", None)
-except AttributeError:
-    query_params = st.experimental_get_query_params()
-    target_work_id = query_params.get("work_id", [None])[0]
-    target_image_url = query_params.get("image_url", [None])[0]
+    qp = st.query_params
+    work_id = qp.get("work_id")
+    img_url = qp.get("image_url")
+except:
+    work_id, img_url = None, None
 
-if target_work_id and target_image_url:
-    st.markdown(f"<h3 style='text-align:center; color:#555;'>📋 กำลังตรวจงาน ID: {target_work_id}</h3>", unsafe_allow_html=True)
-    
+if work_id and img_url:
+    st.info(f"กำลังตรวจงาน ID: {work_id}")
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Referer': 'https://www.cedubru.com/'
-        }
-        
-        response = requests.get(target_image_url, headers=headers, timeout=15)
+        # หลอก Server ว่าเป็น Chrome
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(img_url, headers=headers, timeout=15)
         
         if response.status_code == 200:
             img = Image.open(io.BytesIO(response.content))
-            col1, col2 = st.columns([1, 1.2])
-            with col1:
-                st.image(img, caption="รูปจากนักเรียน", use_column_width=True)
-            with col2:
-                if model:
-                    with st.spinner("AI กำลังวิเคราะห์..."):
-                        result, conf = import_and_predict(img, model, class_names)
-                        st.markdown(f"""
-                        <div class="result-teacher-box">
-                            <h1 style="color: #D32F2F; margin: 0; font-size: 3rem;">{result}</h1>
-                            <p style="color: #555;">ความมั่นใจ: <strong>{conf:.2f}%</strong></p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        if st.button("💾 บันทึกผลการตรวจลงระบบ", type="primary", use_container_width=True):
-                            if update_student_progress(target_work_id, result, conf):
-                                st.success("✅ บันทึกผลเรียบร้อย! คุณสามารถปิดหน้านี้ได้")
-                                st.balloons()
-                            else:
-                                st.error("เกิดข้อผิดพลาดในการบันทึก")
-                else:
-                    st.error("Model Error: ไม่สามารถโหลดโมเดลได้")
-        else:
-            st.error(f"❌ ดาวน์โหลดรูปภาพไม่สำเร็จ (Status Code: {response.status_code})")
-            st.warning("เซิร์ฟเวอร์โรงเรียนอาจบล็อกการเข้าถึง กรุณาลองใหม่")
+            col1, col2 = st.columns([1, 1])
+            col1.image(img, caption="รูปนักเรียน", use_column_width=True)
             
-    except Exception as e:
-        st.error(f"เกิดข้อผิดพลาดในการโหลดรูป: {e}")
-
+            if model:
+                with col2:
+                    with st.spinner("AI กำลังคิด..."):
+                        res, conf = predict(img, model)
+                        st.markdown(f"<div class='result-box'><h1>{res}</h1><p>ความมั่นใจ: {conf:.1f}%</p></div>", unsafe_allow_html=True)
+                        if st.button("💾 บันทึกผล", type="primary"):
+                            if update_student_progress(work_id, res, conf):
+                                st.success("บันทึกแล้ว!")
+                                st.balloons()
+                            else: st.error("บันทึกพลาด")
+            else: st.error("โหลดโมเดลไม่ได้")
+        else:
+            st.error(f"โหลดรูปไม่ได้ (Code: {response.status_code})")
+            st.caption(f"URL: {img_url}")
+    except Exception as e: st.error(f"Error: {e}")
 else:
-    # -----------------------------------------------
-    # 📂 โหมดเดิม (Default Mode)
-    # -----------------------------------------------
-    st.markdown("<p style='text-align: center; color: #555;'>ระบบจำแนกตัวอักษรฮิรางานะ (MobileNetV2)</p>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns([0.1, 3, 0.1])
-    with c2:
-        filter_option = st.radio("📂 เลือกดูข้อมูล:", ["ทั้งหมด (All)", "ตรวจแล้ว (Analyzed)", "ยังไม่ตรวจ (Pending)"])
-
-    image_list = get_image_list(filter_option)
-
-    if len(image_list) > 0:
-        id_list = [row[0] for row in image_list]
-        if 'current_index' not in st.session_state: st.session_state.current_index = 0
-        if st.session_state.current_index >= len(id_list): st.session_state.current_index = 0
-        current_id = id_list[st.session_state.current_index]
-        
-        st.markdown("---")
-        st.markdown(f"<div style='text-align: center; color: #333; margin-bottom: 15px; background: #FFEBEE; padding: 10px; border-radius: 10px;'>📝 รูปที่ {st.session_state.current_index + 1} / {len(id_list)} (ID: {current_id})</div>", unsafe_allow_html=True)
-
-        data_row = get_image_data(current_id)
-        if data_row:
-            blob_data, saved_result, saved_conf = data_row
-            image = Image.open(io.BytesIO(blob_data))
-            col_img, col_act = st.columns([1, 1])
-            with col_img: st.image(image, use_column_width=True)
-            with col_act:
-                st.markdown("### ผลลัพธ์ AI")
-                if saved_result:
-                    st.markdown(f"""
-                        <div style="background-color: #FFEBEE; padding: 20px; border-radius: 15px; border: 2px solid #D32F2F; margin-bottom: 20px; text-align: center;">
-                            <h1 style="color: #D32F2F !important; margin: 0; font-size: 3rem; font-weight: 800;">{saved_result}</h1>
-                            <p style="margin-top: 10px; font-size: 1rem; color: #555;">ความมั่นใจ: <strong>{saved_conf:.2f}%</strong></p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    if st.button("🔄 ตรวจสอบใหม่"):
-                        update_database(current_id, None, 0)
-                        st.experimental_rerun()
-                else:
-                    st.info("⚠️ ยังไม่ได้ระบุตัวอักษร")
-                    if st.button("🇯🇵 อ่านตัวอักษรนี้"):
-                        if model:
-                            with st.spinner("AI กำลังอ่านลายมือ..."):
-                                result, conf = import_and_predict(image, model, class_names)
-                                update_database(current_id, result, conf)
-                                st.success(f"อ่านได้ว่า: {result}")
-                                time.sleep(0.5)
-                                st.experimental_rerun()
-                        else: st.error("ไม่พบโมเดล")
-
-        st.markdown("<br>", unsafe_allow_html=True) 
-        c_prev, c_empty, c_next = st.columns([1, 0.2, 1]) 
-        with c_prev:
-            if st.session_state.current_index > 0:
-                if st.button("◀️ ย้อนกลับ"):
-                    st.session_state.current_index -= 1
-                    st.experimental_rerun()
-        with c_next:
-            if st.session_state.current_index < len(id_list) - 1:
-                if st.button("ถัดไป ▶️"):
-                    st.session_state.current_index += 1
-                    st.experimental_rerun()
-            else:
-                 if st.button("🔄 กลับไปรูปแรก"):
-                    st.session_state.current_index = 0
-                    st.experimental_rerun()
-    else:
-        st.warning("ยังไม่มีข้อมูลรูปภาพในระบบ")
-
-    base_url = "http://www.your-school-website.com/" 
-    st.markdown(f"""
-        <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
-            <a href="{base_url}" target="_blank" class="custom-home-btn">
-                🏠 กลับสู่หน้าบทเรียน
-            </a>
-        </div>
-    """, unsafe_allow_html=True)
+    st.warning("กรุณาเข้าใช้งานผ่านหน้า Teacher Dashboard")
