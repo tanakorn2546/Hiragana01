@@ -168,14 +168,17 @@ def update_database(img_id, result, confidence):
         return True
     except: return False
 
-# --- 4. Smart Model Loader (แก้ไข: รองรับ Google Drive) ---
-if hasattr(st, 'cache_resource'): cache_decorator = st.cache_resource
-else: cache_decorator = st.experimental_singleton
+# --- 4. Smart Model Loader ---
+# [แก้ไข 1] เปลี่ยน experimental_singleton เป็น cache_resource (สำหรับ Streamlit เวอร์ชันใหม่)
+if hasattr(st, 'cache_resource'): 
+    cache_decorator = st.cache_resource
+else: 
+    cache_decorator = st.experimental_singleton
 
 @cache_decorator
 def load_model():
     # -------------------------------------------------------------
-    # 🔥 [แก้ไข] ใส่ Google Drive File ID ของคุณตรงนี้ (สำคัญ!) 🔥
+    # File ID เดิมของคุณ
     file_id = '19raB13lWpH9jjlImjp9VQ-gY7jvpPt8k' 
     # -------------------------------------------------------------
     
@@ -314,7 +317,7 @@ if len(image_list) > 0:
                 
                 if st.button("🔄 ตรวจสอบใหม่"):
                     update_database(current_id, None, 0)
-                    st.experimental_rerun()
+                    st.rerun() # [แก้ไข 2] ใช้ st.rerun()
             
             else:
                 st.info("⚠️ ยังไม่ได้ระบุตัวอักษร")
@@ -349,7 +352,7 @@ if len(image_list) > 0:
                                 update_database(current_id, final_res, conf)
                                 st.success(f"อ่านได้ว่า: {final_res}")
                                 time.sleep(0.5)
-                                st.experimental_rerun()
+                                st.rerun() # [แก้ไข 3] ใช้ st.rerun()
 
                             except Exception as e:
                                 st.error(f"💥 เกิดข้อผิดพลาด: {e}")
@@ -370,17 +373,17 @@ if len(image_list) > 0:
         if st.session_state.current_index > 0:
             if st.button("◀️ ย้อนกลับ"):
                 st.session_state.current_index -= 1
-                st.experimental_rerun()
+                st.rerun() # [แก้ไข 4] ใช้ st.rerun()
             
     with c_next:
         if st.session_state.current_index < len(id_list) - 1:
             if st.button("ถัดไป ▶️"):
                 st.session_state.current_index += 1
-                st.experimental_rerun()
+                st.rerun() # [แก้ไข 5] ใช้ st.rerun()
         else:
              if st.button("🔄 กลับไปรูปแรก"):
                 st.session_state.current_index = 0
-                st.experimental_rerun()
+                st.rerun() # [แก้ไข 6] ใช้ st.rerun()
 
 else:
     st.warning("ยังไม่มีข้อมูลรูปภาพในระบบ")
