@@ -198,7 +198,7 @@ else: cache_decorator = st.experimental_singleton
 
 @cache_decorator
 def load_model():
-    file_id = '1ezDUsDxeabZX06ArdjtcWPk0uradYWDD' 
+    file_id = '1XdUxY4y5KLhBEKwnMKC5Y6LE0ShSlx6X' 
     model_name = 'hiragana_mobilenetv2_best.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     
