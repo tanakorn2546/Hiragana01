@@ -160,7 +160,7 @@ def update_database(img_id, result, confidence):
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        table_name = "culantro_images"
+        table_name = "progress"
         sql = f"UPDATE {table_name} SET prediction_result = %s, confidence = %s WHERE id = %s"
         cursor.execute(sql, (result, float(confidence), img_id))
         conn.commit()
