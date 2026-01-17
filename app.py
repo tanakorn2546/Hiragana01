@@ -149,7 +149,7 @@ def get_image_data(img_id):
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        table_name = "culantro_images"
+        table_name = "progress"
         cursor.execute(f"SELECT image_data, prediction_result, confidence FROM {table_name} WHERE id = %s", (img_id,))
         data = cursor.fetchone()
         conn.close()
@@ -160,7 +160,7 @@ def update_database(img_id, result, confidence):
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        table_name = "progress"
+        table_name = "culantro_images"
         sql = f"UPDATE {table_name} SET prediction_result = %s, confidence = %s WHERE id = %s"
         cursor.execute(sql, (result, float(confidence), img_id))
         conn.commit()
