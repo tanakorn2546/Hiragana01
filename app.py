@@ -128,7 +128,7 @@ def get_image_list(filter_mode):
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        table_name = "progress" 
+        table_name = "culantro_images" 
         
         if "ยังไม่ตรวจ" in filter_mode:
             sql = f"SELECT id, image_name, prediction_result FROM {table_name} WHERE prediction_result IS NULL ORDER BY id ASC"
