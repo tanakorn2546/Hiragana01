@@ -94,9 +94,9 @@ local_css()
 def init_connection():
     # ⚠️ ตรวจสอบค่าเหล่านี้ให้ตรงกับ db.php ของคุณ
     return mysql.connector.connect(
-        host="localhost",           
-        user="root",                
-        password="",                
+        host="www.cedubru.com",
+        user="cedubruc_hiragana_app",
+        password="7gZ8gDJyufzJyzELZkdg",
         database="cedubruc_hiragana_app" 
     )
 
