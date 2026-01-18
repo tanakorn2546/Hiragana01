@@ -116,7 +116,7 @@ def local_css():
 
 local_css()
 
-# --- 3. Database (ปรับปรุงใหม่เชื่อมกับ teacher.php) ---
+# --- 3. Database ---
 def init_connection():
     return mysql.connector.connect(
         host="www.cedubru.com",
@@ -253,9 +253,13 @@ if work_id:
         full_image_url = BASE_URL + image_path
         
         try:
-            # โหลดรูปภาพจาก Server
-            response = requests.get(full_image_url, stream=True)
+            # 🟢 [แก้ไขสำคัญ] ใส่ Headers หลอก Server ว่าเราเป็น Browser (Chrome) เพื่อไม่ให้โดนบล็อก 404/403
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            response = requests.get(full_image_url, stream=True, headers=headers)
             response.raise_for_status() # เช็คว่าโหลดได้จริงไหม (200 OK)
+            
             image = Image.open(io.BytesIO(response.content))
             
             # แบ่งคอลัมน์แสดงผล
