@@ -179,10 +179,10 @@ else:
 def load_model():
     # -------------------------------------------------------------
     # File ID เดิมของคุณ
-    file_id = '19raB13lWpH9jjlImjp9VQ-gY7jvpPt8k' 
+    file_id = '1UmI9gbQZ80sBh3Yj78quqKlQ6SZGkBUe' 
     # -------------------------------------------------------------
     
-    model_name = 'hiragana_mobilenetv2_best.h5'
+    model_name = 'best_hiragana_mobilenetv2.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     
     # 1. เช็คว่ามีไฟล์อยู่ในโฟลเดอร์ปัจจุบันหรือไม่
