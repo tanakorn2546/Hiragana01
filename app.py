@@ -12,174 +12,193 @@ import gdown
 st.set_page_config(
     page_title="Hiragana Sensei AI",
     page_icon="🌸",
-    layout="centered", # เปลี่ยนเป็น Centered เพื่อให้โฟกัสที่เนื้อหาตรงกลางเหมือนแอปมือถือ
+    layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. CSS Styling (Modern Zen Tech Design) ---
+# --- 2. CSS Styling (Fuji & Waves Animation) ---
 def local_css():
     st.markdown("""
     <style>
-        /* Import Fonts */
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&family=Zen+Maru+Gothic:wght@500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&family=Zen+Maru+Gothic:wght@700&display=swap');
 
+        /* --- Theme Variables --- */
         :root {
-            --primary-color: #FF6B6B;
-            --secondary-color: #4D96FF;
-            --bg-color: #Fdfbf7;
-            --card-bg: rgba(255, 255, 255, 0.65);
-            --text-color: #2D3436;
+            --japan-red: #D72638; /* สีแดงแบบธงชาติ/เสาโทริอิ */
+            --bg-sky: linear-gradient(to top, #a18cd1 0%, #fbc2eb 100%);
+            --wave-color: rgba(255, 255, 255, 0.4);
         }
 
-        /* --- Global Settings --- */
         html, body, [class*="css"] {
             font-family: 'Prompt', sans-serif !important;
-            color: var(--text-color);
-            background-color: var(--bg-color);
         }
 
-        /* --- Background Animation (Soft & Flowing) --- */
+        /* --- Background Animation Container --- */
         .stApp {
-            background: radial-gradient(circle at 0% 0%, #ffe6fa 0%, transparent 50%), 
-                        radial-gradient(circle at 100% 100%, #e0f7fa 0%, transparent 50%);
+            background: linear-gradient(180deg, #d4fcff 0%, #fff 60%, #fff 100%);
             background-attachment: fixed;
+            overflow-x: hidden;
         }
 
-        /* --- Modern Glass Card --- */
-        .glass-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-radius: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.8);
-            padding: 40px 30px;
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
-            margin-bottom: 25px;
-            transition: transform 0.3s ease;
+        /* สร้างภูเขาไฟฟูจิด้วย CSS (อยู่ด้านหลังสุด) */
+        .stApp::before {
+            content: "";
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 300px solid transparent;
+            border-right: 300px solid transparent;
+            border-bottom: 250px solid #a2d2ff; /* ตัวภูเขา */
+            z-index: 0;
+            filter: drop-shadow(0 -10px 20px rgba(0,0,0,0.1));
+        }
+        /* หิมะบนยอดฟูจิ */
+        .stApp::after {
+            content: "";
+            position: fixed;
+            bottom: 160px; /* ปรับความสูงหิมะ */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 90px solid transparent;
+            border-right: 90px solid transparent;
+            border-bottom: 90px solid white;
+            z-index: 0;
         }
         
-        /* --- Hero Section --- */
+        /* ดวงอาทิตย์สีแดง */
+        div[data-testid="stAppViewContainer"]::before {
+            content: "";
+            position: fixed;
+            top: 10%;
+            right: 15%;
+            width: 100px;
+            height: 100px;
+            background: #FF4E50;
+            border-radius: 50%;
+            box-shadow: 0 0 40px rgba(255, 78, 80, 0.4);
+            z-index: 0;
+            animation: sunPulse 5s infinite alternate;
+        }
+        @keyframes sunPulse {
+            0% { transform: scale(1); opacity: 0.9; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+        /* --- Moving Waves (คลื่นขยับด้านล่าง) --- */
+        /* เราจะใช้ CSS Masking หรือ Background Image ซ้อนกันเพื่อทำคลื่น */
+        /* เพื่อความง่ายและสวยงาม ใช้ CSS Gradient ทำลาย Seigaiha (คลื่นญี่ปุ่น) */
+        
+        .wave-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 150px;
+            background: url('https://www.transparenttextures.com/patterns/seigaiha.png');
+            background-color: #4facfe;
+            opacity: 0.8;
+            z-index: 1;
+            mask-image: linear-gradient(to top, black 20%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to top, black 20%, transparent 100%);
+            animation: waveMove 60s linear infinite;
+        }
+        @keyframes waveMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 500px 0; }
+        }
+
+        /* --- Glass Card --- */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            border: 2px solid white;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 10; /* ให้อยู่เหนือภูเขา */
+        }
+
+        /* --- Buttons (Red Theme) --- */
+        .stButton button {
+            border-radius: 12px !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+            border: none !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+        }
+        
+        /* ปุ่มหลัก & ปุ่มรอง เปลี่ยนเป็นโทนแดงทั้งหมดตามขอ */
+        div[data-testid="stVerticalBlock"] .stButton button {
+            background: var(--japan-red) !important;
+            color: white !important;
+        }
+        div[data-testid="stVerticalBlock"] .stButton button:hover {
+            background: #b71c1c !important; /* แดงเข้มขึ้นเมื่อเอาเมาส์ชี้ */
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(215, 38, 56, 0.4) !important;
+        }
+        
+        /* ปุ่ม Navigation ให้เป็นสีขาวขอบแดง เพื่อไม่ให้แย่งซีน */
+        div[data-testid="stHorizontalBlock"] .stButton button {
+            background: white !important;
+            color: var(--japan-red) !important;
+            border: 2px solid var(--japan-red) !important;
+        }
+        div[data-testid="stHorizontalBlock"] .stButton button:hover {
+            background: var(--japan-red) !important;
+            color: white !important;
+        }
+
+        /* --- Typography --- */
         .hero-title {
             font-family: 'Zen Maru Gothic', sans-serif;
             font-size: 3.5rem;
-            font-weight: 700;
-            background: linear-gradient(120deg, #FF6B6B, #556270);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: var(--japan-red);
             text-align: center;
+            text-shadow: 2px 2px 0px white;
             margin-bottom: 0;
-            line-height: 1.2;
+            position: relative;
+            z-index: 10;
         }
         .hero-subtitle {
             text-align: center;
-            font-size: 1rem;
-            color: #636e72;
-            font-weight: 300;
+            color: #555;
             margin-bottom: 30px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
+            position: relative;
+            z-index: 10;
         }
-
-        /* --- Buttons Styling --- */
-        .stButton button {
-            border-radius: 50px !important;
-            font-family: 'Prompt', sans-serif !important;
-            font-weight: 500 !important;
-            padding: 0.6rem 1.5rem !important;
-            border: none !important;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05) !important;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
-        }
-
-        /* Primary Button (Analyze) */
-        div[data-testid="stVerticalBlock"] .stButton button[kind="primary"] {
-            background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%) !important;
-            color: white !important;
-            font-size: 1.1rem !important;
-        }
-        div[data-testid="stVerticalBlock"] .stButton button[kind="primary"]:hover {
-            transform: translateY(-2px) scale(1.02);
-            box-shadow: 0 10px 25px rgba(255, 107, 107, 0.4) !important;
-        }
-
-        /* Secondary Button (Nav) */
-        div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"] {
-            background: white !important;
-            color: #555 !important;
-            border: 1px solid #eee !important;
-        }
-        div[data-testid="stVerticalBlock"] .stButton button[kind="secondary"]:hover {
-            border-color: #FF6B6B !important;
-            color: #FF6B6B !important;
-            background: #fff0f0 !important;
-        }
-
-        /* --- Result Display --- */
+        
+        /* --- Result Card --- */
         .result-card {
             background: white;
-            border-radius: 20px;
-            padding: 25px;
+            border-radius: 15px;
+            padding: 20px;
             text-align: center;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
-            position: relative;
-            overflow: hidden;
-        }
-        .result-card::before {
-            content: "";
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 6px;
-            background: linear-gradient(90deg, #FF6B6B, #FF8E53);
+            border-top: 5px solid var(--japan-red);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
         }
         .big-char {
-            font-family: 'Zen Maru Gothic', sans-serif;
-            font-size: 5.5rem;
-            color: #2d3436;
+            font-size: 5rem;
+            color: var(--japan-red);
+            font-weight: bold;
             line-height: 1;
-            margin: 10px 0;
-        }
-        .romaji-tag {
-            background: #f1f2f6;
-            color: #57606f;
-            padding: 5px 15px;
-            border-radius: 15px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            display: inline-block;
-            margin-bottom: 10px;
-        }
-        .confidence-pill {
-            margin-top: 10px;
-            font-size: 0.85rem;
-            color: #27ae60;
-            background: rgba(39, 174, 96, 0.1);
-            padding: 4px 12px;
-            border-radius: 12px;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        /* --- Image Frame --- */
-        div[data-testid="stImage"] img {
-            border-radius: 16px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-            transition: transform 0.3s;
-        }
-        div[data-testid="stImage"] img:hover {
-            transform: scale(1.02);
-        }
-
-        /* --- Custom Progress Bar --- */
-        div[data-testid="stProgress"] > div > div > div {
-            background-color: #FF6B6B;
-            background-image: linear-gradient(315deg, #FF6B6B 0%, #FF8E53 74%);
         }
     </style>
     """, unsafe_allow_html=True)
+    
+    # Inject Wave Container
+    st.markdown('<div class="wave-container"></div>', unsafe_allow_html=True)
 
 local_css()
 
-# --- 3. Database & Model Functions (คงเดิม) ---
+# --- 3. Database & Model Functions (เหมือนเดิม) ---
 def init_connection():
     return mysql.connector.connect(
         host="www.cedubru.com",
@@ -275,72 +294,52 @@ def import_and_predict(image_data, model):
 model = load_model()
 class_names = load_class_names()
 
-# Sidebar (Stats Only - Cleaner)
+# Sidebar
 with st.sidebar:
-    st.markdown("### 📊 Dataset Status")
+    st.markdown("### 🌸 สรุปข้อมูล")
     total_w, checked_w = get_stats()
-    
-    st.markdown(f"""
-    <div style="background:white; padding:15px; border-radius:12px; margin-bottom:10px; border-left: 4px solid #FF6B6B;">
-        <span style="font-size:0.8rem; color:#888;">All Images</span>
-        <h3 style="margin:0; color:#2d3436;">{total_w}</h3>
-    </div>
-    <div style="background:white; padding:15px; border-radius:12px; border-left: 4px solid #4D96FF;">
-        <span style="font-size:0.8rem; color:#888;">Processed</span>
-        <h3 style="margin:0; color:#2d3436;">{checked_w}</h3>
-    </div>
-    """, unsafe_allow_html=True)
+    st.info(f"ภาพทั้งหมด: {total_w}")
+    st.success(f"ตรวจแล้ว: {checked_w}")
 
-# Main Header
-st.markdown('<div class="hero-title">Hiragana AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">Intelligent Recognition System</div>', unsafe_allow_html=True)
+# Header
+st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือภาษาญี่ปุ่นอัจฉริยะ</div>', unsafe_allow_html=True)
 
-# Filter Logic
+# Filter
 query_params = st.query_params
 target_work_id = query_params.get("work_id", None)
 
 c1, c2, c3 = st.columns([1, 4, 1])
 with c2:
     if target_work_id:
-        st.info(f"🔍 Viewing Specific ID: {target_work_id}")
+        st.info(f"🔍 Viewing ID: {target_work_id}")
         filter_option = "ทั้งหมด (All)"
     else:
-        filter_option = st.selectbox(
-            "Filter Data",
-            ["ทั้งหมด (All)", "ยังไม่ตรวจ (Pending)", "ตรวจแล้ว (Analyzed)"],
-            label_visibility="collapsed"
-        )
+        filter_option = st.selectbox("เลือกโหมดการแสดงผล", ["ทั้งหมด (All)", "ยังไม่ตรวจ (Pending)", "ตรวจแล้ว (Analyzed)"], label_visibility="collapsed")
 
 work_list = get_work_list(filter_option)
 
 if len(work_list) > 0:
     id_list = [row[0] for row in work_list]
     
-    # State Management
     if target_work_id and int(target_work_id) in id_list:
         if 'current_index' not in st.session_state or id_list[st.session_state.current_index] != int(target_work_id):
             st.session_state.current_index = id_list.index(int(target_work_id))
     elif 'current_index' not in st.session_state:
         st.session_state.current_index = 0
     
-    # Boundary Check
-    if st.session_state.current_index >= len(id_list):
-        st.session_state.current_index = 0
-    elif st.session_state.current_index < 0:
-        st.session_state.current_index = len(id_list) - 1
+    if st.session_state.current_index >= len(id_list): st.session_state.current_index = 0
+    elif st.session_state.current_index < 0: st.session_state.current_index = len(id_list) - 1
 
     current_id = id_list[st.session_state.current_index]
     
-    # Progress
-    st.progress((st.session_state.current_index + 1) / len(id_list))
-    
-    # --- Modern Card UI ---
+    # --- ลบ st.progress ออกตามที่ขอ --- 
+    # (พื้นที่นี้จะว่างลง ทำให้ดูสะอาดตาขึ้น)
+
+    # --- Glass Card ---
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     
-    # Card Toolbar
-    c_meta, c_nav = st.columns([2, 1])
-    with c_meta:
-        st.caption(f"🆔 Image ID: {current_id} | Sequence: {st.session_state.current_index + 1}/{len(id_list)}")
+    st.caption(f"Image ID: {current_id} | {st.session_state.current_index + 1}/{len(id_list)}")
 
     data_row = get_work_data(current_id)
     
@@ -352,56 +351,48 @@ if len(work_list) > 0:
         if image:
             col_img, col_res = st.columns([1, 1.2], gap="large")
             
-            # Left: Image
             with col_img:
-                st.markdown(f"**Target:** `{true_label}`")
+                st.markdown(f"**โจทย์:** `{true_label}`")
                 st.image(image, use_container_width=True)
             
-            # Right: Action / Result
             with col_res:
-                st.markdown("**AI Analysis Result**")
+                st.markdown("**ผลการตรวจ (AI Result)**")
                 
                 if saved_result:
-                    # Parse Result
                     parts = saved_result.split(' ')
                     char_part = parts[0]
                     romaji_part = parts[1] if len(parts) > 1 else ''
                     
                     st.markdown(f"""
                     <div class="result-card">
-                        <div class="romaji-tag">{romaji_part}</div>
+                        <div style="font-size:1.2rem; color:#555;">{romaji_part}</div>
                         <div class="big-char">{char_part}</div>
-                        <div class="confidence-pill">
-                            ⚡ Confidence: {saved_conf:.1f}%
-                        </div>
+                        <div style="color:green; font-weight:bold;">ความมั่นใจ: {saved_conf:.1f}%</div>
                     </div>
                     """, unsafe_allow_html=True)
                     
                     st.write("")
-                    if st.button("🔄 Re-Analyze", type="secondary", use_container_width=True):
+                    if st.button("🔄 ตรวจใหม่", type="secondary", use_container_width=True):
                         update_database(current_id, None, 0)
                         st.rerun()
-                        
                 else:
-                    # Pending State
                     st.markdown("""
-                    <div class="result-card" style="border: 2px dashed #eee; box-shadow:none; padding:40px;">
-                        <div style="font-size:3rem; opacity:0.3; margin-bottom:10px;">🧠</div>
-                        <div style="color:#aaa; font-size:0.9rem;">Waiting for analysis...</div>
+                    <div class="result-card" style="border: 2px dashed #ffcdd2; background:#fffaf0;">
+                        <h1 style="color:#ef5350; opacity:0.5;">⏳</h1>
+                        <p style="color:#888;">รอการตรวจ...</p>
                     </div>
                     """, unsafe_allow_html=True)
                     
                     st.write("")
-                    if st.button("✨ Analyze Now", type="primary", use_container_width=True):
+                    if st.button("✨ วิเคราะห์ทันที", type="primary", use_container_width=True):
                         if model:
-                            with st.spinner("Processing..."):
+                            with st.spinner("AI กำลังเพ่งจิต..."):
                                 try:
                                     preds = import_and_predict(image, model)
                                     idx = np.argmax(preds)
                                     conf = np.max(preds) * 100
                                     
                                     res_code = class_names[idx] if idx < len(class_names) else "Unknown"
-                                    # Dictionary
                                     hiragana_map = {
                                         'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
                                         'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
@@ -421,43 +412,33 @@ if len(work_list) > 0:
                                 except Exception as e:
                                     st.error(f"Error: {e}")
                         else:
-                            st.error("Model not loaded.")
+                            st.error("Model Error")
 
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Navigation Buttons (Pill Shape)
-    col_prev, col_mid, col_next = st.columns([1, 2, 1])
-    with col_prev:
-         if st.button("⬅️ Prev", use_container_width=True):
+    # Navigation
+    c_prev, c_space, c_next = st.columns([1, 0.2, 1])
+    with c_prev:
+        if st.button("⬅️ รูปก่อนหน้า", use_container_width=True):
             st.session_state.current_index -= 1
             st.rerun()
-    with col_next:
+    with c_next:
         if st.session_state.current_index < len(id_list) - 1:
-            if st.button("Next ➡️", use_container_width=True):
+            if st.button("รูปถัดไป ➡️", use_container_width=True):
                 st.session_state.current_index += 1
                 st.rerun()
         else:
-            if st.button("⏮ Restart", use_container_width=True):
+            if st.button("⏮ เริ่มใหม่", use_container_width=True):
                 st.session_state.current_index = 0
                 st.rerun()
-
 else:
-    st.markdown("""
-        <div class="glass-card" style="text-align:center; padding:60px;">
-            <div style="font-size:4rem; margin-bottom:20px;">📭</div>
-            <h3 style="color:#555;">No Data Found</h3>
-            <p style="color:#888;">Please check the database or filters.</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.info("ไม่พบข้อมูล")
 
-# Footer
+# Footer Link
 st.markdown("""
-    <div style="text-align: center; margin-top: 50px; padding-bottom: 20px; border-top:1px solid rgba(0,0,0,0.05); padding-top:20px;">
-        <a href="https://www.cedubru.com/hiragana/teacher.php?view_student=7" style="text-decoration:none; color:#FF6B6B; font-weight:600;">
-            ← Return to Dashboard
+    <div style="text-align: center; margin-top: 50px; position:relative; z-index:20;">
+        <a href="https://www.cedubru.com/hiragana/teacher.php?view_student=7" style="color:#D72638; text-decoration:none; font-weight:bold; background:rgba(255,255,255,0.8); padding:5px 15px; border-radius:20px;">
+            🏠 กลับสู่หน้าหลัก
         </a>
-        <p style="margin-top:10px; font-size:0.75rem; color:#aaa;">
-            Hiragana Character Classification System • Developed for Research
-        </p>
     </div>
 """, unsafe_allow_html=True)
