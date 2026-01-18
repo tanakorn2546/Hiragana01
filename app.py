@@ -7,7 +7,7 @@ import os
 import mysql.connector
 import io
 import json
-import gdown
+import gdown # 📦 อย่าลืม pip install gdown
 
 # --- [Config] ธีมญี่ปุ่น (ขาว-แดง-ชมพู) ---
 config_dir = ".streamlit"
@@ -78,27 +78,38 @@ def local_css():
             text-align: center;
             width: 100%;
         }
+        /* ปรับแต่ง Radio Button */
+        div[role="radiogroup"] label {
+            background: #fff0f5;
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: 1px solid #ffcdd2;
+        }
     </style>
     """, unsafe_allow_html=True)
 
 local_css()
 
-# --- 3. Database (แก้ไขให้ตรงกับ db.php) ---
+# --- 3. Database Connection ---
 def init_connection():
+    # ⚠️ ตรวจสอบค่าเหล่านี้ให้ตรงกับ db.php ของคุณ
     return mysql.connector.connect(
-        host="localhost",          # แก้ไขให้ตรงกับ Server ของคุณ
-        user="root",               # แก้ไขให้ตรงกับ User ของคุณ
-        password="",               # แก้ไขรหัสผ่าน
-        database="cedubruc_hiragana_app"
+        host="localhost",           
+        user="root",                
+        password="",                
+        database="cedubruc_hiragana_app" 
     )
 
-# ดึงรายการงานจากตาราง progress
+# --- Database Functions ---
+
 def get_work_list(filter_mode):
+    """ ดึงรายการงานจากตาราง progress โดยเลือกเฉพาะที่มีข้อมูลภาพ """
     try:
         conn = init_connection()
         cursor = conn.cursor()
         
-        # เลือกเฉพาะที่มีข้อมูลภาพ (image_data)
+        # SQL: ดึง id, ตัวอักษรโจทย์, และผลลัพธ์ AI จากตาราง progress
+        # เงื่อนไข: ต้องมีข้อมูลภาพ (image_data IS NOT NULL)
         base_sql = "SELECT id, char_code, ai_result FROM progress WHERE image_data IS NOT NULL"
         
         if "ยังไม่ตรวจ" in filter_mode:
@@ -107,32 +118,33 @@ def get_work_list(filter_mode):
             sql = f"{base_sql} AND ai_result IS NOT NULL ORDER BY id DESC"
         else:
             sql = f"{base_sql} ORDER BY id DESC"
-        
+            
         cursor.execute(sql)
         data = cursor.fetchall()
         conn.close()
         return data
     except Exception as e:
-        st.error(f"❌ DB Error: {e}")
+        st.error(f"❌ Database Error: {e}")
         return []
 
-# ดึงข้อมูลภาพ (BLOB) ของงานชิ้นนั้น
 def get_work_data(work_id):
+    """ ดึงข้อมูลภาพ (BLOB) ของงานชิ้นนั้น """
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        # ดึง image_data, ai_result, ai_confidence, char_code
+        # ดึง image_data (LONGBLOB) ออกมาเพื่อแปลงเป็นภาพ
         cursor.execute("SELECT image_data, ai_result, ai_confidence, char_code FROM progress WHERE id = %s", (work_id,))
         data = cursor.fetchone()
         conn.close()
         return data 
     except: return None
 
-# อัปเดตผล AI กลับลงตาราง progress
 def update_database(work_id, result, confidence):
+    """ บันทึกผลการทำนายกลับลงตาราง progress """
     try:
         conn = init_connection()
         cursor = conn.cursor()
+        # อัปเดตคอลัมน์ ai_result และ ai_confidence
         sql = "UPDATE progress SET ai_result = %s, ai_confidence = %s WHERE id = %s"
         cursor.execute(sql, (result, float(confidence), work_id))
         conn.commit()
@@ -162,17 +174,16 @@ def load_model():
                 gdown.download(url, model_name, quiet=False)
                 st.success("✅ โหลดโมเดลสำเร็จ")
             except Exception as e:
-                st.error(f"❌ โหลดโมเดลไม่สำเร็จ: {e}")
+                st.error(f"❌ ดาวน์โหลดโมเดลไม่สำเร็จ: {e}")
                 return None
-
     try:
         return tf.keras.models.load_model(model_name, compile=False)
     except Exception as e:
         st.error(f"❌ ไฟล์โมเดลเสียหาย: {e}")
         return None
 
-# Load Class Names (ตามลำดับที่เทรนมา)
 def load_class_names():
+    # Class names ตามลำดับที่ Train มา
     return [
         'a', 'i', 'u', 'e', 'o',
         'ka', 'ki', 'ku', 'ke', 'ko',
@@ -205,13 +216,13 @@ st.markdown("""
     <div class='app-header-icon'>🇯🇵</div>
     <h1>Hiragana Sensei AI</h1>
     <p style='text-align: center; color: #555; margin-bottom: 30px; font-size: 1.1rem;'>
-        ระบบตรวจจับและจำแนกตัวอักษรฮิรางานะด้วย AI (เชื่อมต่อฐานข้อมูล Integrated)
+        ระบบตรวจจับและจำแนกตัวอักษรฮิรางานะ (เชื่อมต่อฐานข้อมูล Progress)
     </p>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# 🎯 ส่วนรับค่า Deep Link (?work_id=...) จากหน้า Teacher
-# ---------------------------------------------------------
+# ------------------------------------------------------------------
+# 🎯 ส่วนจัดการ Deep Link (?work_id=...) จากหน้า Teacher
+# ------------------------------------------------------------------
 query_params = st.query_params
 target_work_id = query_params.get("work_id", None)
 
@@ -231,14 +242,14 @@ work_list = get_work_list(filter_option)
 if len(work_list) > 0:
     id_list = [row[0] for row in work_list]
     
-    # Logic การกระโดดไปยังรูปที่ต้องการ (Deep Linking)
+    # Logic: ถ้ามี target_work_id ให้กระโดดไปยัง index ของ id นั้น
     if target_work_id and int(target_work_id) in id_list:
         if 'current_index' not in st.session_state or id_list[st.session_state.current_index] != int(target_work_id):
             st.session_state.current_index = id_list.index(int(target_work_id))
     elif 'current_index' not in st.session_state:
         st.session_state.current_index = 0
         
-    # ป้องกัน Index error
+    # ป้องกัน Index error กรณี List เปลี่ยนแปลง
     if st.session_state.current_index >= len(id_list):
         st.session_state.current_index = 0
 
@@ -253,18 +264,18 @@ if len(work_list) > 0:
         # data_row = (image_data, ai_result, ai_confidence, char_code)
         blob_data, saved_result, saved_conf, true_label = data_row
         
-        # แปลง Blob (Binary) เป็น Image Object
+        # 🟢 แปลง BLOB (Binary) กลับเป็นรูปภาพด้วย io.BytesIO
         try:
             image = Image.open(io.BytesIO(blob_data))
         except Exception as e:
-            st.error("❌ ไฟล์รูปภาพเสียหาย ไม่สามารถเปิดได้")
+            st.error("❌ ไฟล์รูปภาพเสียหาย หรือรูปแบบไม่ถูกต้อง")
             image = None
 
         if image:
             col_img, col_act = st.columns([1, 1])
             
             with col_img:
-                st.image(image, caption=f"โจทย์: {true_label}", use_column_width=True)
+                st.image(image, caption=f"โจทย์ตัวอักษร: {true_label}", use_column_width=True)
             
             with col_act:
                 st.markdown("### ผลลัพธ์ AI")
@@ -278,11 +289,12 @@ if len(work_list) > 0:
                     """, unsafe_allow_html=True)
                     
                     if st.button("🔄 ตรวจสอบใหม่"):
+                        # ล้างผลลัพธ์เดิม
                         update_database(current_id, None, 0)
                         st.rerun()
                 else:
-                    st.info("⚠️ ยังไม่ได้ระบุตัวอักษร")
-                    if st.button("🇯🇵 อ่านลายมือ"):
+                    st.info("⚠️ ยังไม่ได้ตรวจ")
+                    if st.button("🇯🇵 เริ่มอ่านลายมือ"):
                         if model:
                             with st.spinner("AI กำลังวิเคราะห์..."):
                                 try:
@@ -295,7 +307,7 @@ if len(work_list) > 0:
                                     else:
                                         res_code = "Unknown"
 
-                                    # Map Romaji to Hiragana (Display)
+                                    # Map Romaji -> Hiragana
                                     hiragana_map = {
                                         'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
                                         'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
@@ -311,7 +323,7 @@ if len(work_list) > 0:
                                     
                                     final_res = hiragana_map.get(res_code, res_code)
                                     
-                                    # บันทึกลงตาราง progress
+                                    # บันทึกลง DB
                                     update_database(current_id, final_res, conf)
                                     st.success(f"อ่านได้ว่า: {final_res}")
                                     time.sleep(0.5)
@@ -343,19 +355,19 @@ if len(work_list) > 0:
                 st.rerun()
 
 else:
-    st.warning("ยังไม่มีงานส่งเข้ามาในระบบ")
+    st.warning("ยังไม่มีงานที่ส่งเข้ามาในระบบ (ตาราง progress ว่างเปล่า)")
 
-# --- Link กลับเว็บหลัก ---
-# เปลี่ยน URL นี้ให้ตรงกับที่อยู่เว็บ PHP ของคุณ
-base_url = "http://localhost/teacher.php" 
+# --- Footer Link ---
+# แก้ลิงก์นี้ให้ตรงกับ URL หน้า Teacher Dashboard ของคุณ
+teacher_dashboard_url = "http://localhost/teacher.php" 
 
 st.markdown(f"""
     <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
-        <a href="{base_url}" target="_self" class="custom-home-btn">
+        <a href="{teacher_dashboard_url}" target="_self" class="custom-home-btn">
             🏠 กลับสู่ห้องพักครู
         </a>
     </div>
-    <div class="footer-credit">
-        <strong>Hiragana Image Classification System V.2.0 (Integrated)</strong>
+    <div style="text-align:center; color:#999; font-size:0.8rem;">
+        Hiragana Image Classification System V.2.0 (Integrated Progress DB)
     </div>
 """, unsafe_allow_html=True)
