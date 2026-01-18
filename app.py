@@ -359,7 +359,7 @@ else:
 
 # --- Footer Link ---
 # แก้ลิงก์นี้ให้ตรงกับ URL หน้า Teacher Dashboard ของคุณ
-teacher_dashboard_url = "http://localhost/teacher.php" 
+teacher_dashboard_url = "https://www.cedubru.com/hiragana/teacher.php?view_student=7" 
 
 st.markdown(f"""
     <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
