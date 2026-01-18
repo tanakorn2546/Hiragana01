@@ -6,85 +6,145 @@ import time
 import os
 import mysql.connector
 import io
-import json
-import gdown # 📦 อย่าลืม pip install gdown
+import gdown
 
-# --- [Config] ธีมญี่ปุ่น (ขาว-แดง-ชมพู) ---
-config_dir = ".streamlit"
-config_path = os.path.join(config_dir, "config.toml")
-
-if not os.path.exists(config_dir):
-    os.makedirs(config_dir)
-
-with open(config_path, "w") as f:
-    f.write('[theme]\nbase="light"\nprimaryColor="#D32F2F"\nbackgroundColor="#FFFFFF"\nsecondaryBackgroundColor="#FFF0F5"\ntextColor="#333333"\n')
-
-# --- 1. ตั้งค่าหน้าเว็บ ---
+# --- 1. Page Configuration ---
 st.set_page_config(
     page_title="Hiragana Sensei AI",
-    page_icon="🇯🇵",
-    layout="centered"
+    page_icon="🌸",
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
-# --- 2. CSS ตกแต่ง ---
+# --- 2. Advanced CSS Styling (Modern UI) ---
 def local_css():
     st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;700&display=swap');
         
-        html, body, [class*="css"], [data-testid="stAppViewContainer"] {
+        /* Global Settings */
+        html, body, [class*="css"] {
             font-family: 'Prompt', sans-serif !important;
-            color: #333333 !important;
+            color: #2c3e50;
         }
+        
+        /* Background */
         .stApp {
-            background: linear-gradient(135deg, #FFEFBA 0%, #FFFFFF 100%) !important;
-            background-attachment: fixed !important;
-            background-size: cover !important;
+            background-color: #f8f9fa;
+            background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
         }
+
+        /* Container Card */
         div.block-container {
-            background-color: rgba(255, 255, 255, 0.95) !important;
-            border-radius: 30px !important;
-            padding: 2rem 2rem 4rem 2rem !important; 
-            margin-top: 2rem !important;
-            box-shadow: 0 15px 50px rgba(0,0,0,0.1) !important;
-            border-top: 5px solid #D32F2F;
+            max-width: 800px;
+            padding-top: 2rem;
+            padding-bottom: 5rem;
         }
-        .app-header-icon {
-            font-size: 80px !important;
-            background: radial-gradient(circle, #ffcdd2 0%, #ffffff 100%) !important;
-            width: 140px !important;
-            height: 140px !important;
-            border-radius: 50% !important;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 15px auto !important;
-            box-shadow: 0 10px 25px rgba(211, 47, 47, 0.2) !important;
-            border: 5px solid #ffffff !important;
+
+        /* Custom Card Style */
+        .css-card {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            border: 1px solid #edf2f7;
+            transition: transform 0.2s;
         }
-        h1 { 
-            text-align: center; color: #D32F2F !important; 
-            font-weight: 800 !important; font-size: 2.2rem !important;
+        .css-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.08);
         }
-        .custom-home-btn {
-            background: linear-gradient(135deg, #424242 0%, #212121 100%);
-            color: #ffffff !important;
-            text-decoration: none;
-            padding: 0.8rem 2rem;
-            border-radius: 15px;
-            display: inline-block;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            transition: all 0.3s ease;
+
+        /* Header */
+        .header-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #e74c3c; /* Japanese Red */
             text-align: center;
-            width: 100%;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 0px rgba(231, 76, 60, 0.1);
         }
-        /* ปรับแต่ง Radio Button */
-        div[role="radiogroup"] label {
-            background: #fff0f5;
-            padding: 10px 20px;
-            border-radius: 10px;
-            border: 1px solid #ffcdd2;
+        .header-subtitle {
+            font-size: 1rem;
+            color: #7f8c8d;
+            text-align: center;
+            margin-bottom: 2rem;
+            font-weight: 300;
         }
+
+        /* Result Display */
+        .result-box {
+            background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%);
+            border-left: 6px solid #e74c3c;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.1);
+        }
+        .result-char {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin: 0;
+            line-height: 1.2;
+        }
+        .result-conf {
+            color: #e74c3c;
+            font-weight: 600;
+            font-size: 1rem;
+            background: rgba(231, 76, 60, 0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-top: 10px;
+        }
+
+        /* Navigation Buttons */
+        .stButton button {
+            border-radius: 12px !important;
+            font-weight: 500 !important;
+            padding: 0.5rem 1rem !important;
+            transition: all 0.3s ease !important;
+            border: none !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        /* Primary Action Button (Check) */
+        div[data-testid="stVerticalBlock"] > div > div > div > div > .stButton button {
+             /* Target specific buttons if possible, otherwise generic styling applied */
+        }
+
+        /* Custom Link Button */
+        .home-btn {
+            display: inline-block;
+            background: #2c3e50;
+            color: white !important;
+            padding: 12px 30px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(44, 62, 80, 0.3);
+            transition: all 0.3s;
+        }
+        .home-btn:hover {
+            background: #34495e;
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(44, 62, 80, 0.4);
+        }
+
+        /* Radio Group Styling */
+        div[role="radiogroup"] {
+            background: white;
+            padding: 10px;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            justify-content: center;
+            display: flex;
+            gap: 10px;
+        }
+        
     </style>
     """, unsafe_allow_html=True)
 
@@ -92,7 +152,6 @@ local_css()
 
 # --- 3. Database Connection ---
 def init_connection():
-    # ⚠️ ตรวจสอบค่าเหล่านี้ให้ตรงกับ db.php ของคุณ
     return mysql.connector.connect(
         host="www.cedubru.com",
         user="cedubruc_hiragana_app",
@@ -101,15 +160,10 @@ def init_connection():
     )
 
 # --- Database Functions ---
-
 def get_work_list(filter_mode):
-    """ ดึงรายการงานจากตาราง progress โดยเลือกเฉพาะที่มีข้อมูลภาพ """
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        
-        # SQL: ดึง id, ตัวอักษรโจทย์, และผลลัพธ์ AI จากตาราง progress
-        # เงื่อนไข: ต้องมีข้อมูลภาพ (image_data IS NOT NULL)
         base_sql = "SELECT id, char_code, ai_result FROM progress WHERE image_data IS NOT NULL"
         
         if "ยังไม่ตรวจ" in filter_mode:
@@ -128,11 +182,9 @@ def get_work_list(filter_mode):
         return []
 
 def get_work_data(work_id):
-    """ ดึงข้อมูลภาพ (BLOB) ของงานชิ้นนั้น """
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        # ดึง image_data (LONGBLOB) ออกมาเพื่อแปลงเป็นภาพ
         cursor.execute("SELECT image_data, ai_result, ai_confidence, char_code FROM progress WHERE id = %s", (work_id,))
         data = cursor.fetchone()
         conn.close()
@@ -140,11 +192,9 @@ def get_work_data(work_id):
     except: return None
 
 def update_database(work_id, result, confidence):
-    """ บันทึกผลการทำนายกลับลงตาราง progress """
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        # อัปเดตคอลัมน์ ai_result และ ai_confidence
         sql = "UPDATE progress SET ai_result = %s, ai_confidence = %s WHERE id = %s"
         cursor.execute(sql, (result, float(confidence), work_id))
         conn.commit()
@@ -153,12 +203,7 @@ def update_database(work_id, result, confidence):
     except: return False
 
 # --- 4. Smart Model Loader ---
-if hasattr(st, 'cache_resource'): 
-    cache_decorator = st.cache_resource
-else: 
-    cache_decorator = st.experimental_singleton
-
-@cache_decorator
+@st.cache_resource
 def load_model():
     file_id = '1Yw1YCu35oxQT5jpB0xqouZMD-MH2EGZO' 
     model_name = 'hiragana_mobilenetv2_best.h5'
@@ -169,32 +214,22 @@ def load_model():
         if os.path.exists(local_path):
             model_name = local_path
         else:
-            st.warning("📥 กำลังดาวน์โหลด Model...")
             try:
                 gdown.download(url, model_name, quiet=False)
-                st.success("✅ โหลดโมเดลสำเร็จ")
-            except Exception as e:
-                st.error(f"❌ ดาวน์โหลดโมเดลไม่สำเร็จ: {e}")
+            except Exception:
                 return None
     try:
         return tf.keras.models.load_model(model_name, compile=False)
-    except Exception as e:
-        st.error(f"❌ ไฟล์โมเดลเสียหาย: {e}")
+    except Exception:
         return None
 
 def load_class_names():
-    # Class names ตามลำดับที่ Train มา
     return [
-        'a', 'i', 'u', 'e', 'o',
-        'ka', 'ki', 'ku', 'ke', 'ko',
-        'sa', 'shi', 'su', 'se', 'so',
-        'ta', 'chi', 'tsu', 'te', 'to',
-        'na', 'ni', 'nu', 'ne', 'no',
-        'ha', 'hi', 'fu', 'he', 'ho',
-        'ma', 'mi', 'mu', 'me', 'mo',
-        'ya', 'yu', 'yo',
-        'ra', 'ri', 'ru', 're', 'ro',
-        'wa', 'wo', 'n'
+        'a', 'i', 'u', 'e', 'o', 'ka', 'ki', 'ku', 'ke', 'ko',
+        'sa', 'shi', 'su', 'se', 'so', 'ta', 'chi', 'tsu', 'te', 'to',
+        'na', 'ni', 'nu', 'ne', 'no', 'ha', 'hi', 'fu', 'he', 'ho',
+        'ma', 'mi', 'mu', 'me', 'mo', 'ya', 'yu', 'yo',
+        'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'n'
     ]
 
 def import_and_predict(image_data, model):
@@ -208,33 +243,32 @@ def import_and_predict(image_data, model):
     data[0] = img_array
     return model.predict(data)
 
-# --- 5. Main UI ---
+# --- 5. Main UI Logic ---
 model = load_model()
 class_names = load_class_names()
 
+# --- Header Section ---
 st.markdown("""
-    <div class='app-header-icon'>🇯🇵</div>
-    <h1>Hiragana Sensei AI</h1>
-    <p style='text-align: center; color: #555; margin-bottom: 30px; font-size: 1.1rem;'>
-        ระบบตรวจจับและจำแนกตัวอักษรฮิรางานะ (เชื่อมต่อฐานข้อมูล Progress)
-    </p>
+    <div class="header-title">🇯🇵 Hiragana Sensei AI</div>
+    <div class="header-subtitle">ระบบช่วยตรวจลายมือฮิรางานะอัจฉริยะ</div>
 """, unsafe_allow_html=True)
 
-# ------------------------------------------------------------------
-# 🎯 ส่วนจัดการ Deep Link (?work_id=...) จากหน้า Teacher
-# ------------------------------------------------------------------
+# --- Filter & Navigation Logic ---
 query_params = st.query_params
 target_work_id = query_params.get("work_id", None)
 
-c1, c2, c3 = st.columns([0.1, 3, 0.1])
-with c2:
+c_fil_1, c_fil_2, c_fil_3 = st.columns([1, 4, 1])
+with c_fil_2:
     if target_work_id:
+        st.info(f"🔍 Viewing Specific ID: {target_work_id}")
         filter_option = "ทั้งหมด (All)"
-        st.info(f"🔍 กำลังตรวจสอบงานรหัส ID: {target_work_id}")
     else:
+        # Styled Radio
         filter_option = st.radio(
-            "📂 เลือกดูข้อมูล:", 
-            ["ทั้งหมด (All)", "ตรวจแล้ว (Analyzed)", "ยังไม่ตรวจ (Pending)"], 
+            "",
+            ["ทั้งหมด (All)", "ยังไม่ตรวจ (Pending)", "ตรวจแล้ว (Analyzed)"],
+            horizontal=True,
+            label_visibility="collapsed"
         )
 
 work_list = get_work_list(filter_option)
@@ -242,72 +276,74 @@ work_list = get_work_list(filter_option)
 if len(work_list) > 0:
     id_list = [row[0] for row in work_list]
     
-    # Logic: ถ้ามี target_work_id ให้กระโดดไปยัง index ของ id นั้น
+    # Sync Index with ID
     if target_work_id and int(target_work_id) in id_list:
         if 'current_index' not in st.session_state or id_list[st.session_state.current_index] != int(target_work_id):
             st.session_state.current_index = id_list.index(int(target_work_id))
     elif 'current_index' not in st.session_state:
         st.session_state.current_index = 0
         
-    # ป้องกัน Index error กรณี List เปลี่ยนแปลง
     if st.session_state.current_index >= len(id_list):
         st.session_state.current_index = 0
 
     current_id = id_list[st.session_state.current_index]
     
-    st.markdown("---")
-    st.markdown(f"<div style='text-align: center; color: #333; margin-bottom: 15px; font-weight: normal; font-size: 1.1rem; background: #FFEBEE; padding: 10px; border-radius: 10px;'>📝 งานที่ {st.session_state.current_index + 1} / {len(id_list)} (ID: {current_id})</div>", unsafe_allow_html=True)
+    # --- Progress Indicator ---
+    progress = (st.session_state.current_index + 1) / len(id_list)
+    st.progress(progress)
+    st.markdown(f"<div style='text-align:right; font-size:0.8rem; color:#888; margin-top:-10px;'>Card {st.session_state.current_index + 1} / {len(id_list)}</div>", unsafe_allow_html=True)
+
+    # --- Main Content Card ---
+    st.markdown('<div class="css-card">', unsafe_allow_html=True) # Start Card
 
     data_row = get_work_data(current_id)
     
     if data_row:
-        # data_row = (image_data, ai_result, ai_confidence, char_code)
         blob_data, saved_result, saved_conf, true_label = data_row
         
-        # 🟢 แปลง BLOB (Binary) กลับเป็นรูปภาพด้วย io.BytesIO
         try:
             image = Image.open(io.BytesIO(blob_data))
-        except Exception as e:
-            st.error("❌ ไฟล์รูปภาพเสียหาย หรือรูปแบบไม่ถูกต้อง")
+        except:
             image = None
 
         if image:
-            col_img, col_act = st.columns([1, 1])
+            col1, col2 = st.columns([1.2, 1])
             
-            with col_img:
-                st.image(image, caption=f"โจทย์ตัวอักษร: {true_label}", use_column_width=True)
+            with col1:
+                st.markdown(f"**📝 โจทย์:** `{true_label}`")
+                st.image(image, use_column_width=True, caption=f"ID: {current_id}")
             
-            with col_act:
-                st.markdown("### ผลลัพธ์ AI")
+            with col2:
+                st.markdown("### 🤖 ผลลัพธ์ AI")
                 
                 if saved_result:
+                    # Show Result Card
                     st.markdown(f"""
-                        <div style="background-color: #FFEBEE; padding: 20px; border-radius: 15px; border: 2px solid #D32F2F; margin-bottom: 20px; text-align: center;">
-                            <h1 style="color: #D32F2F !important; margin: 0; font-size: 3rem; font-weight: 800;">{saved_result}</h1>
-                            <p style="margin-top: 10px; font-size: 1rem; color: #555;">ความมั่นใจ: <strong>{saved_conf:.2f}%</strong></p>
+                        <div class="result-box">
+                            <p style="color:#888; font-size:0.9rem; margin-bottom:5px;">AI อ่านว่า</p>
+                            <p class="result-char">{saved_result.split(' ')[0]}</p>
+                            <p style="color:#555; font-size:0.9rem;">{saved_result.split(' ')[1] if len(saved_result.split(' ')) > 1 else ''}</p>
+                            <div class="result-conf">⚡ Confidence {saved_conf:.1f}%</div>
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    if st.button("🔄 ตรวจสอบใหม่"):
-                        # ล้างผลลัพธ์เดิม
+                    st.write("") # Spacer
+                    if st.button("🔄 ตรวจใหม่", type="secondary", use_container_width=True):
                         update_database(current_id, None, 0)
                         st.rerun()
                 else:
-                    st.info("⚠️ ยังไม่ได้ตรวจ")
-                    if st.button("🇯🇵 เริ่มอ่านลายมือ"):
+                    # Pending State
+                    st.info("รอการตรวจ...")
+                    if st.button("✨ วิเคราะห์ผล (Analyze)", type="primary", use_container_width=True):
                         if model:
-                            with st.spinner("AI กำลังวิเคราะห์..."):
+                            with st.spinner("กำลังประมวลผล..."):
                                 try:
                                     preds = import_and_predict(image, model)
                                     idx = np.argmax(preds)
                                     conf = np.max(preds) * 100
                                     
-                                    if idx < len(class_names):
-                                        res_code = class_names[idx]
-                                    else:
-                                        res_code = "Unknown"
+                                    res_code = class_names[idx] if idx < len(class_names) else "Unknown"
 
-                                    # Map Romaji -> Hiragana
                                     hiragana_map = {
                                         'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
                                         'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
@@ -322,52 +358,55 @@ if len(work_list) > 0:
                                     }
                                     
                                     final_res = hiragana_map.get(res_code, res_code)
-                                    
-                                    # บันทึกลง DB
                                     update_database(current_id, final_res, conf)
-                                    st.success(f"อ่านได้ว่า: {final_res}")
+                                    st.toast(f"✅ เรียบร้อย! อ่านว่า {final_res}")
                                     time.sleep(0.5)
                                     st.rerun()
 
                                 except Exception as e:
-                                    st.error(f"💥 เกิดข้อผิดพลาด: {e}")
+                                    st.error(f"Error: {e}")
                         else:
-                            st.error("ไม่พบโมเดล")
+                            st.error("Model not found")
 
-    # --- ปุ่มนำทาง ---
-    st.markdown("<br>", unsafe_allow_html=True) 
-    c_prev, c_empty, c_next = st.columns([1, 0.2, 1]) 
+    st.markdown('</div>', unsafe_allow_html=True) # End Card
+
+    # --- Navigation Bar ---
+    c_prev, c_center, c_next = st.columns([1, 2, 1])
     
     with c_prev:
         if st.session_state.current_index > 0:
-            if st.button("◀️ ย้อนกลับ"):
+            if st.button("⬅️ ก่อนหน้า"):
                 st.session_state.current_index -= 1
                 st.rerun()
             
     with c_next:
         if st.session_state.current_index < len(id_list) - 1:
-            if st.button("ถัดไป ▶️"):
+            if st.button("ถัดไป ➡️"):
                 st.session_state.current_index += 1
                 st.rerun()
         else:
-             if st.button("🔄 กลับไปรูปแรก"):
+            if st.button("⏮ เริ่มใหม่"):
                 st.session_state.current_index = 0
                 st.rerun()
 
 else:
-    st.warning("ยังไม่มีงานที่ส่งเข้ามาในระบบ (ตาราง progress ว่างเปล่า)")
+    st.markdown("""
+        <div class="css-card" style="text-align:center; padding:50px;">
+            <h3>📭 ไม่พบรายการงาน</h3>
+            <p style="color:#888;">ไม่มีข้อมูลในหมวดที่คุณเลือก</p>
+        </div>
+    """, unsafe_allow_html=True)
 
-# --- Footer Link ---
-# แก้ลิงก์นี้ให้ตรงกับ URL หน้า Teacher Dashboard ของคุณ
+# --- Footer ---
 teacher_dashboard_url = "https://www.cedubru.com/hiragana/teacher.php?view_student=7" 
 
 st.markdown(f"""
-    <div style="text-align: center; margin-top: 30px; margin-bottom: 20px;">
-        <a href="{teacher_dashboard_url}" target="_self" class="custom-home-btn">
-            🏠 กลับสู่ห้องพักครู
+    <div style="text-align: center; margin-top: 40px;">
+        <a href="{teacher_dashboard_url}" target="_self" class="home-btn">
+            🏠 กลับสู่ห้องพักครู (Dashboard)
         </a>
     </div>
-    <div style="text-align:center; color:#999; font-size:0.8rem;">
-        Hiragana Image Classification System V.2.0 (Integrated Progress DB)
+    <div style="text-align:center; color:#bdc3c7; font-size:0.8rem; margin-top: 20px;">
+        Hiragana Image Classification System V.2.1 | Powered by MobileNetV2
     </div>
 """, unsafe_allow_html=True)
