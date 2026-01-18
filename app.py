@@ -160,8 +160,8 @@ else:
 
 @cache_decorator
 def load_model():
-    file_id = '1ewVIh-nmbhmi2_Wd0BvCdR1td3wyLp5E' 
-    model_name = 'best_hiragana_mobilenetv2.h5'
+    file_id = '1Yw1YCu35oxQT5jpB0xqouZMD-MH2EGZO' 
+    model_name = 'hiragana_mobilenetv2_best.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     
     if not os.path.exists(model_name):
