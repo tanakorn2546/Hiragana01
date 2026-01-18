@@ -160,7 +160,7 @@ else:
 
 @cache_decorator
 def load_model():
-    file_id = '1UmI9gbQZ80sBh3Yj78quqKlQ6SZGkBUe' 
+    file_id = '1ewVIh-nmbhmi2_Wd0BvCdR1td3wyLp5E' 
     model_name = 'best_hiragana_mobilenetv2.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     
