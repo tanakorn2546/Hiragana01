@@ -12,139 +12,191 @@ import gdown
 st.set_page_config(
     page_title="Hiragana Sensei AI",
     page_icon="🌸",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    layout="wide", # เปลี่ยนเป็น Wide เพื่อให้ใช้พื้นที่เต็มจอมากขึ้น
+    initial_sidebar_state="expanded" # เปิด Sidebar ไว้เลยเพื่อไม่ให้โล่ง
 )
 
-# --- 2. Advanced CSS Styling (Modern UI) ---
+# --- 2. Advanced CSS Styling (Super Modern UI) ---
 def local_css():
     st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;700&family=Mochiy+Pop+One&display=swap');
         
-        /* Global Settings */
+        /* --- Global Settings --- */
         html, body, [class*="css"] {
             font-family: 'Prompt', sans-serif !important;
             color: #2c3e50;
         }
         
-        /* Background */
+        /* --- Background with Japanese Pattern --- */
         .stApp {
-            background-color: #f8f9fa;
-            background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
-            background-size: 20px 20px;
+            background-color: #fff0f5; /* Lavender Blush */
+            opacity: 1;
+            background-image:  radial-gradient(#ffcdd2 1.5px, transparent 1.5px), radial-gradient(#ffcdd2 1.5px, #fff0f5 1.5px);
+            background-size: 30px 30px;
+            background-position: 0 0, 15px 15px;
         }
 
-        /* Container Card */
+        /* --- Main Card Container --- */
         div.block-container {
-            max-width: 800px;
+            max-width: 900px;
             padding-top: 2rem;
             padding-bottom: 5rem;
+            margin: auto;
         }
 
-        /* Custom Card Style */
+        /* --- Card Style --- */
         .css-card {
-            background: #ffffff;
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
-            border: 1px solid #edf2f7;
-            transition: transform 0.2s;
-        }
-        .css-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.08);
-        }
-
-        /* Header */
-        .header-title {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #e74c3c; /* Japanese Red */
-            text-align: center;
-            margin-bottom: 0.5rem;
-            text-shadow: 2px 2px 0px rgba(231, 76, 60, 0.1);
-        }
-        .header-subtitle {
-            font-size: 1rem;
-            color: #7f8c8d;
-            text-align: center;
-            margin-bottom: 2rem;
-            font-weight: 300;
-        }
-
-        /* Result Display */
-        .result-box {
-            background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%);
-            border-left: 6px solid #e74c3c;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.1);
-        }
-        .result-char {
-            font-size: 3.5rem;
-            font-weight: 700;
-            color: #2c3e50;
-            margin: 0;
-            line-height: 1.2;
-        }
-        .result-conf {
-            color: #e74c3c;
-            font-weight: 600;
-            font-size: 1rem;
-            background: rgba(231, 76, 60, 0.1);
-            padding: 4px 12px;
-            border-radius: 20px;
-            display: inline-block;
-            margin-top: 10px;
-        }
-
-        /* Navigation Buttons */
-        .stButton button {
-            border-radius: 12px !important;
-            font-weight: 500 !important;
-            padding: 0.5rem 1rem !important;
-            transition: all 0.3s ease !important;
-            border: none !important;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 25px;
+            padding: 30px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+            border: 2px solid #ffffff;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
         }
         
-        /* Primary Action Button (Check) */
-        div[data-testid="stVerticalBlock"] > div > div > div > div > .stButton button {
-             /* Target specific buttons if possible, otherwise generic styling applied */
+        /* แถบสีแดงด้านบนการ์ด */
+        .css-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 8px;
+            background: linear-gradient(90deg, #ff9a9e 0%, #ff5252 100%);
         }
 
-        /* Custom Link Button */
-        .home-btn {
+        /* --- Image Styling (Polaroid Look) --- */
+        div[data-testid="stImage"] {
+            background-color: white;
+            padding: 15px;
+            padding-bottom: 40px; /* พื้นที่ด้านล่างเยอะหน่อยเหมือนโพลารอยด์ */
+            border-radius: 4px;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.15);
+            transform: rotate(-2deg); /* เอียงนิดๆ ให้ดูอาร์ต */
+            transition: transform 0.3s ease;
+            border: 1px solid #eee;
+        }
+        div[data-testid="stImage"]:hover {
+            transform: rotate(0deg) scale(1.02); /* ชี้แล้วตรงและขยาย */
+            box-shadow: 10px 10px 25px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+        div[data-testid="stImage"] img {
+            border-radius: 0px !important; /* รูปข้างในไม่มน */
+            border: 1px solid #ddd;
+        }
+
+        /* --- Header Text --- */
+        .header-title {
+            font-family: 'Mochiy Pop One', sans-serif; /* ฟอนต์น่ารักๆ สำหรับหัวข้อ */
+            font-size: 3rem;
+            color: #d32f2f;
+            text-align: center;
+            margin-bottom: 0px;
+            text-shadow: 3px 3px 0px rgba(255,200,200,0.5);
+            letter-spacing: 2px;
+        }
+        .header-subtitle {
+            font-size: 1.1rem;
+            color: #7f8c8d;
+            text-align: center;
+            margin-bottom: 2.5rem;
+            font-weight: 400;
+            background-color: rgba(255,255,255,0.6);
             display: inline-block;
+            padding: 5px 20px;
+            border-radius: 20px;
+        }
+        .header-container {
+            text-align: center;
+        }
+
+        /* --- Result Box --- */
+        .result-box {
+            background: linear-gradient(135deg, #ffffff 0%, #fff5f5 100%);
+            border: 2px dashed #ffcdd2;
+            border-radius: 20px;
+            padding: 25px;
+            text-align: center;
+            position: relative;
+        }
+        .result-char {
+            font-family: 'Mochiy Pop One', sans-serif;
+            font-size: 4rem;
+            color: #d32f2f;
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        .result-conf {
+            font-size: 0.9rem;
+            background: #ffebee;
+            color: #c62828;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        /* --- Button Styling --- */
+        .stButton button {
+            border-radius: 15px !important;
+            font-weight: 600 !important;
+            border: none !important;
+            padding: 0.6rem 1.2rem !important;
+            transition: all 0.2s !important;
+            box-shadow: 0 4px 0px rgba(0,0,0,0.1) !important; /* เงาแบบปุ่มกด */
+            width: 100%;
+        }
+        
+        /* ปุ่ม Analyze (Primary) */
+        div[data-testid="stVerticalBlock"] > div > div > div > div > .stButton button[kind="primary"] {
+             background: linear-gradient(to bottom, #ff7e7e, #d32f2f) !important;
+             color: white !important;
+        }
+        /* ปุ่ม Analyze Hover */
+        div[data-testid="stVerticalBlock"] > div > div > div > div > .stButton button[kind="primary"]:hover {
+             transform: translateY(-2px);
+             box-shadow: 0 6px 0px rgba(180, 0, 0, 0.2) !important;
+        }
+        /* ปุ่ม Analyze Active (กดลง) */
+        div[data-testid="stVerticalBlock"] > div > div > div > div > .stButton button[kind="primary"]:active {
+             transform: translateY(2px);
+             box-shadow: 0 0px 0px rgba(0,0,0,0) !important;
+        }
+
+        /* ปุ่ม Next/Prev (Secondary) */
+        .stButton button {
+             background: white !important;
+             color: #555 !important;
+             border: 2px solid #eee !important;
+        }
+        .stButton button:hover {
+             background: #f8f9fa !important;
+             border-color: #d32f2f !important;
+             color: #d32f2f !important;
+        }
+
+        /* --- Footer Link Button --- */
+        .home-btn {
             background: #2c3e50;
             color: white !important;
-            padding: 12px 30px;
+            padding: 15px 40px;
             border-radius: 50px;
             text-decoration: none;
-            font-weight: 500;
-            box-shadow: 0 4px 15px rgba(44, 62, 80, 0.3);
+            font-weight: 600;
+            box-shadow: 0 10px 20px rgba(44, 62, 80, 0.3);
             transition: all 0.3s;
+            border: 4px solid rgba(255,255,255,0.2);
         }
         .home-btn:hover {
             background: #34495e;
-            transform: scale(1.05);
-            box-shadow: 0 6px 20px rgba(44, 62, 80, 0.4);
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(44, 62, 80, 0.4);
         }
 
-        /* Radio Group Styling */
-        div[role="radiogroup"] {
-            background: white;
-            padding: 10px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            justify-content: center;
-            display: flex;
-            gap: 10px;
-        }
-        
     </style>
     """, unsafe_allow_html=True)
 
@@ -202,6 +254,18 @@ def update_database(work_id, result, confidence):
         return True
     except: return False
 
+def get_stats():
+    """ดึงสถิติภาพรวม"""
+    try:
+        conn = init_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*), COUNT(ai_result) FROM progress WHERE image_data IS NOT NULL")
+        total, checked = cursor.fetchone()
+        conn.close()
+        return total, checked
+    except:
+        return 0, 0
+
 # --- 4. Smart Model Loader ---
 @st.cache_resource
 def load_model():
@@ -247,17 +311,43 @@ def import_and_predict(image_data, model):
 model = load_model()
 class_names = load_class_names()
 
+# --- Sidebar ---
+with st.sidebar:
+    st.markdown("## 📊 Dashboard Info")
+    st.markdown("สรุปข้อมูลการตรวจงานล่าสุด")
+    
+    total_w, checked_w = get_stats()
+    pending_w = total_w - checked_w
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        st.metric("ทั้งหมด", f"{total_w}", "ใบ")
+    with c2:
+        st.metric("ตรวจแล้ว", f"{checked_w}", f"{(checked_w/total_w*100) if total_w else 0:.0f}%")
+        
+    st.markdown("---")
+    st.info(f"📍 รอการตรวจ: {pending_w} ใบ")
+    st.markdown("---")
+    st.markdown("### 💡 วิธีใช้งาน")
+    st.markdown("""
+    1. เลือกโหมดกรองข้อมูล (ทั้งหมด/รอตรวจ)
+    2. กด **'วิเคราะห์ผล'** เพื่อให้ AI อ่าน
+    3. กด **'ตรวจใหม่'** หากต้องการแก้ไข
+    """)
+
 # --- Header Section ---
 st.markdown("""
-    <div class="header-title">🇯🇵 Hiragana Sensei AI</div>
-    <div class="header-subtitle">ระบบช่วยตรวจลายมือฮิรางานะอัจฉริยะ</div>
+    <div class="header-container">
+        <div class="header-title">🌸 Hiragana Sensei 🌸</div>
+        <div class="header-subtitle">AI Assistant for Japanese Handwriting</div>
+    </div>
 """, unsafe_allow_html=True)
 
 # --- Filter & Navigation Logic ---
 query_params = st.query_params
 target_work_id = query_params.get("work_id", None)
 
-c_fil_1, c_fil_2, c_fil_3 = st.columns([1, 4, 1])
+c_fil_1, c_fil_2, c_fil_3 = st.columns([1, 6, 1])
 with c_fil_2:
     if target_work_id:
         st.info(f"🔍 Viewing Specific ID: {target_work_id}")
@@ -291,7 +381,7 @@ if len(work_list) > 0:
     # --- Progress Indicator ---
     progress = (st.session_state.current_index + 1) / len(id_list)
     st.progress(progress)
-    st.markdown(f"<div style='text-align:right; font-size:0.8rem; color:#888; margin-top:-10px;'>Card {st.session_state.current_index + 1} / {len(id_list)}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:right; font-size:0.8rem; color:#888; margin-top:-10px; margin-bottom: 20px;'>Card {st.session_state.current_index + 1} / {len(id_list)}</div>", unsafe_allow_html=True)
 
     # --- Main Content Card ---
     st.markdown('<div class="css-card">', unsafe_allow_html=True) # Start Card
@@ -310,11 +400,13 @@ if len(work_list) > 0:
             col1, col2 = st.columns([1.2, 1])
             
             with col1:
-                st.markdown(f"**📝 โจทย์:** `{true_label}`")
+                st.markdown(f"##### 📝 โจทย์: `{true_label}`")
+                # รูปจะถูกแต่งด้วย CSS (Polaroid Style) อัตโนมัติ
                 st.image(image, use_column_width=True, caption=f"ID: {current_id}")
             
             with col2:
-                st.markdown("### 🤖 ผลลัพธ์ AI")
+                st.markdown("##### 🤖 ผลลัพธ์ AI")
+                st.write("") # Spacer
                 
                 if saved_result:
                     # Show Result Card
@@ -328,7 +420,7 @@ if len(work_list) > 0:
                     """, unsafe_allow_html=True)
                     
                     st.write("") # Spacer
-                    if st.button("🔄 ตรวจใหม่", type="secondary", use_container_width=True):
+                    if st.button("🔄 ตรวจใหม่", key="btn_retry", use_container_width=True):
                         update_database(current_id, None, 0)
                         st.rerun()
                 else:
@@ -375,24 +467,25 @@ if len(work_list) > 0:
     
     with c_prev:
         if st.session_state.current_index > 0:
-            if st.button("⬅️ ก่อนหน้า"):
+            if st.button("⬅️ ก่อนหน้า", key="btn_prev"):
                 st.session_state.current_index -= 1
                 st.rerun()
             
     with c_next:
         if st.session_state.current_index < len(id_list) - 1:
-            if st.button("ถัดไป ➡️"):
+            if st.button("ถัดไป ➡️", key="btn_next"):
                 st.session_state.current_index += 1
                 st.rerun()
         else:
-            if st.button("⏮ เริ่มใหม่"):
+            if st.button("⏮ เริ่มใหม่", key="btn_reset"):
                 st.session_state.current_index = 0
                 st.rerun()
 
 else:
     st.markdown("""
         <div class="css-card" style="text-align:center; padding:50px;">
-            <h3>📭 ไม่พบรายการงาน</h3>
+            <h1 style="font-size: 50px;">📭</h1>
+            <h3>ไม่พบรายการงาน</h3>
             <p style="color:#888;">ไม่มีข้อมูลในหมวดที่คุณเลือก</p>
         </div>
     """, unsafe_allow_html=True)
@@ -406,7 +499,7 @@ st.markdown(f"""
             🏠 กลับสู่ห้องพักครู (Dashboard)
         </a>
     </div>
-    <div style="text-align:center; color:#bdc3c7; font-size:0.8rem; margin-top: 20px;">
-        Hiragana Image Classification System V.2.1 | Powered by MobileNetV2
+    <div style="text-align:center; color:#95a5a6; font-size:0.8rem; margin-top: 25px;">
+        Hiragana Image Classification System V.2.2 Pro
     </div>
 """, unsafe_allow_html=True)
