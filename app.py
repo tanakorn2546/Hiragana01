@@ -90,9 +90,6 @@ def local_css():
         }
 
         /* --- Moving Waves (คลื่นขยับด้านล่าง) --- */
-        /* เราจะใช้ CSS Masking หรือ Background Image ซ้อนกันเพื่อทำคลื่น */
-        /* เพื่อความง่ายและสวยงาม ใช้ CSS Gradient ทำลาย Seigaiha (คลื่นญี่ปุ่น) */
-        
         .wave-container {
             position: fixed;
             bottom: 0;
@@ -198,7 +195,7 @@ def local_css():
 
 local_css()
 
-# --- 3. Database & Model Functions (เหมือนเดิม) ---
+# --- 3. Database & Model Functions ---
 def init_connection():
     return mysql.connector.connect(
         host="www.cedubru.com",
@@ -280,15 +277,45 @@ def load_class_names():
         'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'n'
     ]
 
+# --- 🟢 ส่วนที่แก้ไข: ปรับให้รองรับ Input Size อัตโนมัติ ---
 def import_and_predict(image_data, model):
-    size = (224, 224) 
-    image = ImageOps.fit(image_data, size, Image.Resampling.LANCZOS)
-    if image.mode != "RGB": image = image.convert("RGB")
+    # ตรวจสอบว่า Model ต้องการ Input ขนาดเท่าไหร่
+    input_shape = model.input_shape
+    
+    # ดึงค่า Height, Width, Channels (ถ้าหาไม่เจอให้ใช้ค่า Default 224x224x3)
+    target_h = input_shape[1] if input_shape[1] is not None else 224
+    target_w = input_shape[2] if input_shape[2] is not None else 224
+    channels = input_shape[3] if input_shape[3] is not None else 3
+
+    # 1. Resize ภาพให้ตรงกับที่ Model ต้องการ
+    image = ImageOps.fit(image_data, (target_w, target_h), Image.Resampling.LANCZOS)
+
+    # 2. ปรับโหมดสี (RGB หรือ ขาวดำ)
+    if channels == 1:
+        if image.mode != "L": image = image.convert("L")
+    else:
+        if image.mode != "RGB": image = image.convert("RGB")
+
+    # 3. แปลงเป็น Numpy Array
     img_array = np.asarray(image).astype(np.float32)
-    img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
-    data = np.ndarray(shape=(1, 224, 224, 3), dtype=np.float32)
-    data[0] = img_array
-    return model.predict(data)
+
+    # 4. Preprocessing (ปรับค่าสี)
+    if channels == 3:
+        # ใช้ MobileNet Preprocess เฉพาะกรณี RGB
+        img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
+    else:
+        # ถ้าเป็นขาวดำ ให้หาร 255 เพื่อทำ Normalize ปกติ
+        img_array = img_array / 255.0
+
+    # 5. เพิ่มมิติ Batch (สำคัญมาก แก้ Error ตรงนี้)
+    # ผลลัพธ์จะเป็น (1, Height, Width, Channels)
+    img_array = np.expand_dims(img_array, axis=0)
+    
+    # กรณี Grayscale บางที Numpy จะหายไป 1 มิติ ต้องเติมให้ครบ (1, H, W, 1)
+    if channels == 1 and len(img_array.shape) == 3:
+         img_array = np.expand_dims(img_array, axis=-1)
+
+    return model.predict(img_array)
 
 # --- 4. UI Logic ---
 model = load_model()
@@ -333,9 +360,6 @@ if len(work_list) > 0:
 
     current_id = id_list[st.session_state.current_index]
     
-    # --- ลบ st.progress ออกตามที่ขอ --- 
-    # (พื้นที่นี้จะว่างลง ทำให้ดูสะอาดตาขึ้น)
-
     # --- Glass Card ---
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     
