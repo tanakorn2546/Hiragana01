@@ -259,8 +259,8 @@ def get_stats():
 
 @st.cache_resource
 def load_model():
-    file_id = '1uT5Pg7vnf-Gbl7w6i8FGQyZv8QHYmmFH' 
-    model_name = 'efficientnetv2_hiragana_final.h5'
+    file_id = '1g6MqXR8rg2gvjaFZNC2xkQ4GhNGFVqK3' 
+    model_name = 'hiragana_cnn_v1.h5'
     url = f'https://drive.google.com/uc?id={file_id}'
     if not os.path.exists(model_name):
         local_path = os.path.join('saved_models', model_name)
