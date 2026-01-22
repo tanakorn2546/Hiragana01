@@ -132,7 +132,7 @@ def load_model():
     # พยายามโหลด v2 ก่อน ถ้าไม่มีใช้ v1
     model_name = 'hiragana_cnn_v2.h5'
     # หมายเหตุ: ตรวจสอบ file_id ของคุณให้ถูกต้องถ้ามีการเปลี่ยนไฟล์
-    file_id = '1yyoys5aKzOr7RajIG90eqmziGGaz-9Rg' 
+    file_id = '1Fj4_t9TEsyNWVJhYFtnzvM5KXjz30zzH' 
     
     # เช็ค Local
     if not os.path.exists(model_name) and not os.path.exists(os.path.join('saved_models', model_name)):
