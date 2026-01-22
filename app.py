@@ -66,23 +66,43 @@ def get_stats():
         total, checked = cursor.fetchone(); conn.close(); return total, checked
     except: return 0, 0
 
-# --- 4. Model Loading (Load v3) ---
+# --- 4. Model Loading (Updated with GDrive ID) ---
 @st.cache_resource
 def load_model():
-    model_name = 'hiragana_cnn_v3.h5' # *** ใช้ v3 ตัวใหม่ ***
-    # ใส่ Google Drive ID ของไฟล์ v3 ที่นี่ถ้ามี
-    # file_id = 'YOUR_NEW_V3_FILE_ID' 
+    # ชื่อไฟล์ที่ต้องการ (เวอร์ชั่นใหม่)
+    model_name = 'hiragana_cnn_v3.h5'
     
-    if not os.path.exists(model_name) and not os.path.exists(os.path.join('saved_models', model_name)):
-         # Fallback logic
-         pass
+    # ------------------------------------------------------------------
+    # 👇 ใส่ ID จาก Google Drive ของไฟล์ v3 ตรงนี้ครับ
+    # ------------------------------------------------------------------
+    file_id = '11YqKURFNuUZH0h1lnkn4C8Cc0MFcMgJh'  # <--- แก้ไขตรงนี้
+    # ------------------------------------------------------------------
 
-    if not os.path.exists(model_name):
-        local_path = os.path.join('saved_models', model_name)
-        if os.path.exists(local_path): model_name = local_path
+    # กำหนดตำแหน่งไฟล์ (Local)
+    local_path = os.path.join('saved_models', model_name)
+    
+    # ตรวจสอบว่ามีไฟล์หรือไม่ ถ้าไม่มีให้โหลด
+    if not os.path.exists(model_name) and not os.path.exists(local_path):
+        # สร้างโฟลเดอร์ saved_models ถ้ายังไม่มี
+        if not os.path.exists('saved_models'):
+            os.makedirs('saved_models')
             
-    try: return tf.keras.models.load_model(model_name, compile=False)
-    except: return None
+        url = f'https://drive.google.com/uc?id={file_id}'
+        try:
+            with st.spinner(f'กำลังดาวน์โหลดโมเดล {model_name} ...'):
+                gdown.download(url, local_path, quiet=False)
+        except Exception as e:
+            st.error(f"❌ ดาวน์โหลดไม่สำเร็จ: {e}")
+            return None
+
+    # เลือก path ที่ถูกต้องเพื่อโหลด
+    final_path = local_path if os.path.exists(local_path) else model_name
+    
+    try: 
+        return tf.keras.models.load_model(final_path, compile=False)
+    except Exception as e: 
+        st.error(f"❌ โหลดโมเดลไม่สำเร็จ: {e}")
+        return None
 
 def load_class_names():
     return ['a', 'i', 'u', 'e', 'o', 'ka', 'ki', 'ku', 'ke', 'ko', 'sa', 'shi', 'su', 'se', 'so', 'ta', 'chi', 'tsu', 'te', 'to', 'na', 'ni', 'nu', 'ne', 'no', 'ha', 'hi', 'fu', 'he', 'ho', 'ma', 'mi', 'mu', 'me', 'mo', 'ya', 'yu', 'yo', 'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'n']
