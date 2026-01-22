@@ -7,7 +7,7 @@ import os
 import mysql.connector
 import io
 import gdown
-import cv2  # ต้อง pip install opencv-python-headless ก่อน
+import cv2  # Library สำหรับจัดการภาพ (ต้องลง opencv-python-headless แล้ว)
 
 # --- 1. Page Configuration ---
 st.set_page_config(
@@ -131,7 +131,8 @@ def get_stats():
 def load_model():
     # พยายามโหลด v2 ก่อน ถ้าไม่มีใช้ v1
     model_name = 'hiragana_cnn_v2.h5'
-    file_id = '1-M2wPvnLBsThQ3zAMZ9DisW8sFZrud6i' # ใส่ ID ของ v2 ที่นี่ถ้าอัปโหลดขึ้น Drive แล้ว
+    # หมายเหตุ: ตรวจสอบ file_id ของคุณให้ถูกต้องถ้ามีการเปลี่ยนไฟล์
+    file_id = '1yyoys5aKzOr7RajIG90eqmziGGaz-9Rg' 
     
     # เช็ค Local
     if not os.path.exists(model_name) and not os.path.exists(os.path.join('saved_models', model_name)):
@@ -159,7 +160,7 @@ def load_class_names():
         'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'n'
     ]
 
-# --- 🟢 ส่วนที่แก้ไข: Advanced Preprocessing ---
+# --- 🟢 Advanced Preprocessing Function ---
 def import_and_predict(image_data, model):
     # 1. แปลง PIL Image เป็น Numpy Array (ขาวดำ)
     # Exif Transpose แก้ปัญหารูปจากมือถือหมุนผิดด้าน
@@ -167,7 +168,7 @@ def import_and_predict(image_data, model):
     img_gray = np.array(image.convert("L"))
 
     # 2. Smart Invert (เช็คว่าพื้นหลังขาวหรือดำ)
-    # ถ้ามุมภาพสว่าง (ค่า > 127) แสดงว่าเป็นกระดาษขาว -> ต้องกลับสี
+    # ถ้ามุมภาพสว่าง (ค่า > 127) หรือค่าเฉลี่ยสว่าง แสดงว่าเป็นกระดาษขาว -> ต้องกลับสี
     if img_gray[0, 0] > 127 or np.mean(img_gray) > 127:
         img_gray = cv2.bitwise_not(img_gray)
     
@@ -193,7 +194,7 @@ def import_and_predict(image_data, model):
     img_dilated = cv2.dilate(img_cropped, kernel, iterations=1)
 
     # 6. Resize เป็น 64x64 และคงสัดส่วน (Aspect Ratio)
-    # แปลงกลับเป็น PIL เพื่อใช้ฟังก์ชัน fit
+    # แปลงกลับเป็น PIL เพื่อใช้ฟังก์ชัน fit ของ ImageOps
     final_pil = Image.fromarray(img_dilated)
     final_img = ImageOps.fit(final_pil, (64, 64), Image.Resampling.LANCZOS)
     
@@ -203,9 +204,12 @@ def import_and_predict(image_data, model):
     # ---------------------------------------------
 
     # 7. Normalize & Reshape
+    # หาร 255 ให้ค่าอยู่ระหว่าง 0-1
     img_array = np.asarray(final_img).astype(np.float32) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)  # Batch dimension
-    img_array = np.expand_dims(img_array, axis=-1) # Channel dimension (1)
+    # เพิ่มมิติ Batch (1, 64, 64)
+    img_array = np.expand_dims(img_array, axis=0)
+    # เพิ่มมิติ Channel (1, 64, 64, 1) สำหรับภาพขาวดำ
+    img_array = np.expand_dims(img_array, axis=-1)
 
     return model.predict(img_array)
 
