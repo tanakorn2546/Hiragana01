@@ -7,6 +7,7 @@ import os
 import mysql.connector
 import io
 import gdown
+import cv2  # ต้อง pip install opencv-python-headless ก่อน
 
 # --- 1. Page Configuration ---
 st.set_page_config(
@@ -16,181 +17,53 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- 2. CSS Styling (Fuji & Waves Animation) ---
+# --- 2. CSS Styling ---
 def local_css():
     st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&family=Zen+Maru+Gothic:wght@700&display=swap');
-
-        /* --- Theme Variables --- */
-        :root {
-            --japan-red: #D72638; /* สีแดงแบบธงชาติ/เสาโทริอิ */
-            --bg-sky: linear-gradient(to top, #a18cd1 0%, #fbc2eb 100%);
-            --wave-color: rgba(255, 255, 255, 0.4);
-        }
-
-        html, body, [class*="css"] {
-            font-family: 'Prompt', sans-serif !important;
-        }
-
-        /* --- Background Animation Container --- */
-        .stApp {
-            background: linear-gradient(180deg, #d4fcff 0%, #fff 60%, #fff 100%);
-            background-attachment: fixed;
-            overflow-x: hidden;
-        }
-
-        /* สร้างภูเขาไฟฟูจิด้วย CSS (อยู่ด้านหลังสุด) */
-        .stApp::before {
-            content: "";
-            position: fixed;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 0;
-            height: 0;
-            border-left: 300px solid transparent;
-            border-right: 300px solid transparent;
-            border-bottom: 250px solid #a2d2ff; /* ตัวภูเขา */
-            z-index: 0;
-            filter: drop-shadow(0 -10px 20px rgba(0,0,0,0.1));
-        }
-        /* หิมะบนยอดฟูจิ */
-        .stApp::after {
-            content: "";
-            position: fixed;
-            bottom: 160px; /* ปรับความสูงหิมะ */
-            left: 50%;
-            transform: translateX(-50%);
-            width: 0;
-            height: 0;
-            border-left: 90px solid transparent;
-            border-right: 90px solid transparent;
-            border-bottom: 90px solid white;
-            z-index: 0;
-        }
+        :root { --japan-red: #D72638; }
+        html, body, [class*="css"] { font-family: 'Prompt', sans-serif !important; }
+        .stApp { background: linear-gradient(180deg, #d4fcff 0%, #fff 60%, #fff 100%); background-attachment: fixed; }
         
-        /* ดวงอาทิตย์สีแดง */
+        /* Fuji Mountain & Sun */
+        .stApp::before {
+            content: ""; position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 300px solid transparent; border-right: 300px solid transparent;
+            border-bottom: 250px solid #a2d2ff; z-index: 0;
+        }
+        .stApp::after {
+            content: ""; position: fixed; bottom: 160px; left: 50%; transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 90px solid transparent; border-right: 90px solid transparent;
+            border-bottom: 90px solid white; z-index: 0;
+        }
         div[data-testid="stAppViewContainer"]::before {
-            content: "";
-            position: fixed;
-            top: 10%;
-            right: 15%;
-            width: 100px;
-            height: 100px;
-            background: #FF4E50;
-            border-radius: 50%;
-            box-shadow: 0 0 40px rgba(255, 78, 80, 0.4);
-            z-index: 0;
+            content: ""; position: fixed; top: 10%; right: 15%; width: 100px; height: 100px;
+            background: #FF4E50; border-radius: 50%; z-index: 0;
             animation: sunPulse 5s infinite alternate;
         }
-        @keyframes sunPulse {
-            0% { transform: scale(1); opacity: 0.9; }
-            100% { transform: scale(1.1); opacity: 1; }
-        }
+        @keyframes sunPulse { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(1.1); opacity: 1; } }
 
-        /* --- Moving Waves (คลื่นขยับด้านล่าง) --- */
-        .wave-container {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 150px;
-            background: url('https://www.transparenttextures.com/patterns/seigaiha.png');
-            background-color: #4facfe;
-            opacity: 0.8;
-            z-index: 1;
-            mask-image: linear-gradient(to top, black 20%, transparent 100%);
-            -webkit-mask-image: linear-gradient(to top, black 20%, transparent 100%);
-            animation: waveMove 60s linear infinite;
-        }
-        @keyframes waveMove {
-            0% { background-position: 0 0; }
-            100% { background-position: 500px 0; }
-        }
-
-        /* --- Glass Card --- */
+        /* UI Elements */
         .glass-card {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            border: 2px solid white;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            position: relative;
-            z-index: 10; /* ให้อยู่เหนือภูเขา */
+            background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px);
+            border-radius: 20px; border: 2px solid white; padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-bottom: 20px; position: relative; z-index: 10;
         }
-
-        /* --- Buttons (Red Theme) --- */
-        .stButton button {
-            border-radius: 12px !important;
-            font-weight: 600 !important;
-            transition: all 0.3s ease !important;
-            border: none !important;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
-        }
-        
-        /* ปุ่มหลัก & ปุ่มรอง เปลี่ยนเป็นโทนแดงทั้งหมดตามขอ */
-        div[data-testid="stVerticalBlock"] .stButton button {
-            background: var(--japan-red) !important;
-            color: white !important;
-        }
-        div[data-testid="stVerticalBlock"] .stButton button:hover {
-            background: #b71c1c !important; /* แดงเข้มขึ้นเมื่อเอาเมาส์ชี้ */
-            transform: translateY(-2px);
-            box-shadow: 0 8px 15px rgba(215, 38, 56, 0.4) !important;
-        }
-        
-        /* ปุ่ม Navigation ให้เป็นสีขาวขอบแดง เพื่อไม่ให้แย่งซีน */
-        div[data-testid="stHorizontalBlock"] .stButton button {
-            background: white !important;
-            color: var(--japan-red) !important;
-            border: 2px solid var(--japan-red) !important;
-        }
-        div[data-testid="stHorizontalBlock"] .stButton button:hover {
-            background: var(--japan-red) !important;
-            color: white !important;
-        }
-
-        /* --- Typography --- */
-        .hero-title {
-            font-family: 'Zen Maru Gothic', sans-serif;
-            font-size: 3.5rem;
-            color: var(--japan-red);
-            text-align: center;
-            text-shadow: 2px 2px 0px white;
-            margin-bottom: 0;
-            position: relative;
-            z-index: 10;
-        }
-        .hero-subtitle {
-            text-align: center;
-            color: #555;
-            margin-bottom: 30px;
-            position: relative;
-            z-index: 10;
-        }
-        
-        /* --- Result Card --- */
         .result-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-            border-top: 5px solid var(--japan-red);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            background: white; border-radius: 15px; padding: 20px; text-align: center;
+            border-top: 5px solid var(--japan-red); box-shadow: 0 5px 15px rgba(0,0,0,0.05);
         }
-        .big-char {
-            font-size: 5rem;
-            color: var(--japan-red);
-            font-weight: bold;
-            line-height: 1;
-        }
+        .big-char { font-size: 5rem; color: var(--japan-red); font-weight: bold; line-height: 1; }
+        .stButton button { border-radius: 12px !important; font-weight: 600 !important; border: none !important; }
+        div[data-testid="stVerticalBlock"] .stButton button { background: var(--japan-red) !important; color: white !important; }
+        div[data-testid="stHorizontalBlock"] .stButton button { background: white !important; color: var(--japan-red) !important; border: 2px solid var(--japan-red) !important; }
+        .hero-title { font-family: 'Zen Maru Gothic', sans-serif; font-size: 3.5rem; color: var(--japan-red); text-align: center; margin-bottom: 0; position: relative; z-index: 10; }
+        .hero-subtitle { text-align: center; color: #555; margin-bottom: 30px; position: relative; z-index: 10; }
     </style>
     """, unsafe_allow_html=True)
-    
-    # Inject Wave Container
     st.markdown('<div class="wave-container"></div>', unsafe_allow_html=True)
 
 local_css()
@@ -256,15 +129,24 @@ def get_stats():
 
 @st.cache_resource
 def load_model():
-    file_id = '1RCO76u7AMEgZh4ucMbnjvM81bBrmFMeg' 
+    # พยายามโหลด v2 ก่อน ถ้าไม่มีใช้ v1
     model_name = 'hiragana_cnn_v2.h5'
-    url = f'https://drive.google.com/uc?id={file_id}'
+    file_id = '1-M2wPvnLBsThQ3zAMZ9DisW8sFZrud6i' # ใส่ ID ของ v2 ที่นี่ถ้าอัปโหลดขึ้น Drive แล้ว
+    
+    # เช็ค Local
+    if not os.path.exists(model_name) and not os.path.exists(os.path.join('saved_models', model_name)):
+         # ถ้าไม่เจอ v2 ให้ลองใช้ v1 แทนชั่วคราว
+         model_name = 'hiragana_cnn_v1.h5'
+
     if not os.path.exists(model_name):
         local_path = os.path.join('saved_models', model_name)
-        if os.path.exists(local_path): model_name = local_path
+        if os.path.exists(local_path): 
+            model_name = local_path
         else:
+            url = f'https://drive.google.com/uc?id={file_id}'
             try: gdown.download(url, model_name, quiet=False)
             except: return None
+            
     try: return tf.keras.models.load_model(model_name, compile=False)
     except: return None
 
@@ -277,43 +159,53 @@ def load_class_names():
         'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'n'
     ]
 
-# --- 🟢 ส่วนที่แก้ไข: ปรับให้รองรับ Input Size อัตโนมัติ ---
+# --- 🟢 ส่วนที่แก้ไข: Advanced Preprocessing ---
 def import_and_predict(image_data, model):
-    # ตรวจสอบว่า Model ต้องการ Input ขนาดเท่าไหร่
-    input_shape = model.input_shape
+    # 1. แปลง PIL Image เป็น Numpy Array (ขาวดำ)
+    # Exif Transpose แก้ปัญหารูปจากมือถือหมุนผิดด้าน
+    image = ImageOps.exif_transpose(image_data)
+    img_gray = np.array(image.convert("L"))
+
+    # 2. Smart Invert (เช็คว่าพื้นหลังขาวหรือดำ)
+    # ถ้ามุมภาพสว่าง (ค่า > 127) แสดงว่าเป็นกระดาษขาว -> ต้องกลับสี
+    if img_gray[0, 0] > 127 or np.mean(img_gray) > 127:
+        img_gray = cv2.bitwise_not(img_gray)
     
-    # ดึงค่า Height, Width, Channels (ถ้าหาไม่เจอให้ใช้ค่า Default 224x224x3)
-    target_h = input_shape[1] if input_shape[1] is not None else 224
-    target_w = input_shape[2] if input_shape[2] is not None else 224
-    channels = input_shape[3] if input_shape[3] is not None else 3
+    # 3. Thresholding (ตัดเงาและ Noise)
+    # ใช้ Otsu's thresholding เพื่อแยกหมึกออกจากกระดาษให้ชัดที่สุด
+    _, img_thresh = cv2.threshold(img_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # 1. Resize ภาพให้ตรงกับที่ Model ต้องการ
-    image = ImageOps.fit(image_data, (target_w, target_h), Image.Resampling.LANCZOS)
-
-    # 2. ปรับโหมดสี (RGB หรือ ขาวดำ)
-    if channels == 1:
-        if image.mode != "L": image = image.convert("L")
+    # 4. Find Bounding Box (ตัดเฉพาะตัวอักษร)
+    # หาพิกัดของหมึก เพื่อ Crop พื้นที่ว่างรอบๆ ทิ้ง
+    coords = cv2.findNonZero(img_thresh)
+    if coords is not None:
+        x, y, w, h = cv2.boundingRect(coords)
+        # เพิ่ม Padding (ขอบ) นิดหน่อยไม่ให้ตัวหนังสือชิดขอบเกินไป
+        pad = 10
+        img_cropped = img_thresh[max(0, y-pad):min(img_thresh.shape[0], y+h+pad), 
+                                 max(0, x-pad):min(img_thresh.shape[1], x+pad)]
     else:
-        if image.mode != "RGB": image = image.convert("RGB")
+        img_cropped = img_thresh # ถ้าหาไม่เจอให้ใช้ภาพเดิม
 
-    # 3. แปลงเป็น Numpy Array
-    img_array = np.asarray(image).astype(np.float32)
+    # 5. Dilation (ทำเส้นให้หนาขึ้น)
+    # แก้ปัญหาปากกาลูกลื่นเส้นบางเกินไป
+    kernel = np.ones((3, 3), np.uint8)
+    img_dilated = cv2.dilate(img_cropped, kernel, iterations=1)
 
-    # 4. Preprocessing (ปรับค่าสี)
-    if channels == 3:
-        # ใช้ MobileNet Preprocess เฉพาะกรณี RGB
-        img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
-    else:
-        # ถ้าเป็นขาวดำ ให้หาร 255 เพื่อทำ Normalize ปกติ
-        img_array = img_array / 255.0
-
-    # 5. เพิ่มมิติ Batch (สำคัญมาก แก้ Error ตรงนี้)
-    # ผลลัพธ์จะเป็น (1, Height, Width, Channels)
-    img_array = np.expand_dims(img_array, axis=0)
+    # 6. Resize เป็น 64x64 และคงสัดส่วน (Aspect Ratio)
+    # แปลงกลับเป็น PIL เพื่อใช้ฟังก์ชัน fit
+    final_pil = Image.fromarray(img_dilated)
+    final_img = ImageOps.fit(final_pil, (64, 64), Image.Resampling.LANCZOS)
     
-    # กรณี Grayscale บางที Numpy จะหายไป 1 มิติ ต้องเติมให้ครบ (1, H, W, 1)
-    if channels == 1 and len(img_array.shape) == 3:
-         img_array = np.expand_dims(img_array, axis=-1)
+    # --- Debug: แสดงให้ user เห็นว่า AI เห็นอะไร ---
+    with st.expander("👁️ สิ่งที่ AI มองเห็น (Processed Image)", expanded=False):
+        st.image(final_img, width=150, caption="ภาพที่ส่งเข้า Model")
+    # ---------------------------------------------
+
+    # 7. Normalize & Reshape
+    img_array = np.asarray(final_img).astype(np.float32) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)  # Batch dimension
+    img_array = np.expand_dims(img_array, axis=-1) # Channel dimension (1)
 
     return model.predict(img_array)
 
@@ -362,7 +254,6 @@ if len(work_list) > 0:
     
     # --- Glass Card ---
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    
     st.caption(f"Image ID: {current_id} | {st.session_state.current_index + 1}/{len(id_list)}")
 
     data_row = get_work_data(current_id)
@@ -436,7 +327,7 @@ if len(work_list) > 0:
                                 except Exception as e:
                                     st.error(f"Error: {e}")
                         else:
-                            st.error("Model Error")
+                            st.error("Model Error: ไม่พบไฟล์โมเดล")
 
     st.markdown('</div>', unsafe_allow_html=True)
     
