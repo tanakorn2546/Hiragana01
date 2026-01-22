@@ -147,7 +147,7 @@ def load_model():
             model_name = local_path
         else:
             # ใส่ Link Google Drive ใหม่ถ้าเปลี่ยนไฟล์ หรือใช้ไฟล์เดิม
-            file_id = '1g6MqXR8rg2gvjaFZNC2xkQ4GhNGFVqK3' 
+            file_id = '1RCO76u7AMEgZh4ucMbnjvM81bBrmFMeg' 
             url = f'https://drive.google.com/uc?id={file_id}'
             try: gdown.download(url, model_name, quiet=False)
             except: return None
