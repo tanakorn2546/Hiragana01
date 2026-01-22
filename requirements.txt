@@ -1,8 +1,7 @@
-streamlit>=1.32.0
-tensorflow-cpu==2.15.0
-mysql-connector-python
+streamlit
+tensorflow
+numpy
 Pillow
+mysql-connector-python
 gdown
-requests
-numpy<2.0.0
-protobuf!=4.24.0,>=3.19.6
+opencv-python-headless
