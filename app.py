@@ -247,9 +247,9 @@ def get_stats():
 @st.cache_resource
 def load_model():
     # ⚠️ ตรวจสอบว่าไฟล์โมเดลชื่อนี้มีอยู่ใน saved_models หรือยัง
-    model_name = 'hiragana_model_complete.h5' 
+    model_name = 'best_hiragana_mobilenetv2.h5' 
     # ถ้าจะใช้ไฟล์ ID เดิมจาก GDrive ให้แก้ตรงนี้ แต่แนะนำให้ Upload ไฟล์ใหม่ขึ้น Server หรือแก้ ID
-    file_id = '1Qvvhlf18ghHQwysnVKhZWZpZ3oBg2SJo' 
+    file_id = '1ewVIh-nmbhmi2_Wd0BvCdR1td3wyLp5E' 
     url = f'https://drive.google.com/uc?id={file_id}'
     
     if not os.path.exists(model_name):
