@@ -131,7 +131,6 @@ def load_model():
     
     # 👇👇👇 ใส่ File ID โมเดล MobileNetV2 ของคุณตรงนี้ 👇👇👇
     file_id = '1gcqpDUAdgGTeh1dW9s3ODsvSwNvmQLXs' 
-    # ตัวอย่าง: '1gcqpDUAdgGTeh1dW9s3ODsvSwNvmQLXs'
     
     url = f'https://drive.google.com/uc?id={file_id}'
     
@@ -171,13 +170,24 @@ def load_class_names():
         'u', 'wa', 'wo', 'ya', 'yo', 'yu'
     ]
 
-# --- 🟢 Preprocessing ---
+# --- 🟢 Preprocessing (แก้ไข: ปรับปรุงให้รองรับปากกาทุกสี) ---
 def import_and_predict(image_data, model):
+    # 1. ปรับขนาดภาพ
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
-    if image.mode != "RGB": image = image.convert("RGB")
+    
+    # 2. แก้ปัญหาเรื่องสี: แปลงเป็นขาวดำ (Grayscale) ก่อน
+    if image.mode != "L":
+        image = image.convert("L")
+    
+    # 3. แปลงกลับเป็น RGB (เพราะ MobileNetV2 ต้องการ Input 3 Channels)
+    # ผลลัพธ์คือภาพ RGB ที่มีแต่สีเทา (R=G=B) ช่วยลด Bias เรื่องสีปากกา
+    image = image.convert("RGB")
+    
+    # 4. แปลงเป็น Array และ Preprocess
     img_array = np.asarray(image).astype(np.float32)
     img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
     img_array = np.expand_dims(img_array, axis=0)
+    
     return model.predict(img_array)
 
 # --- 4. UI Logic ---
