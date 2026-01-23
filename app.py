@@ -48,14 +48,14 @@ def local_css():
 
 local_css()
 
-# --- 3. Database Functions (ปรับปรุงใหม่) ---
+# --- 3. Database Functions ---
 
-# ใช้ TTL=0 เพื่อให้ดึงข้อมูลใหม่เสมอเมื่อมีการกระทำ แต่ Cache connection ไว้
 def get_connection():
+    # ⚠️ ใช้ Credentials เดียวกับ PHP
     return mysql.connector.connect(
         host="www.cedubru.com",
         user="cedubruc_hiragana_app",
-        password="7gZ8gDJyufzJyzELZkdg", # ⚠️ ควรเปลี่ยนรหัสผ่านใหม่และใช้ st.secrets ในอนาคต
+        password="7gZ8gDJyufzJyzELZkdg", 
         database="cedubruc_hiragana_app",
         connect_timeout=10
     )
@@ -64,6 +64,7 @@ def get_work_list(filter_mode):
     try:
         conn = get_connection()
         cursor = conn.cursor()
+        # ดึงรายการที่มีรูปภาพ (image_data ไม่เป็น NULL)
         base_sql = "SELECT id, char_code, ai_result FROM progress WHERE image_data IS NOT NULL"
         
         if "ยังไม่ตรวจ" in filter_mode: 
@@ -78,17 +79,14 @@ def get_work_list(filter_mode):
         conn.close()
         return data
     except mysql.connector.Error as err:
-        if err.errno == 2003:
-            st.error("🚨 ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (Connection Timeout)")
-            st.warning("กรุณาแจ้ง Admin ให้เพิ่ม IP ของ Streamlit ใน 'Remote MySQL' ของ Hosting (อนุญาต %)")
-        else:
-            st.error(f"❌ Database Error: {err}")
+        st.error(f"❌ Database Error: {err}")
         return []
 
 def get_work_data(work_id):
     try:
         conn = get_connection()
         cursor = conn.cursor()
+        # ดึง BLOB data ออกมา
         cursor.execute("SELECT image_data, ai_result, ai_confidence, char_code FROM progress WHERE id = %s", (work_id,))
         data = cursor.fetchone()
         conn.close()
@@ -99,7 +97,6 @@ def update_database(work_id, result, confidence):
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        # ใช้ ai_confidence เป็น float เพื่อป้องกัน error
         conf_val = float(confidence) if confidence else 0.0
         sql = "UPDATE progress SET ai_result = %s, ai_confidence = %s WHERE id = %s"
         cursor.execute(sql, (result, conf_val, work_id))
@@ -120,13 +117,12 @@ def get_stats():
         return data
     except: return 0, 0
 
-# --- Fix MobileNetV2 Version Issue ---
+# --- Fix MobileNetV2 & Model Loading ---
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, **kwargs):
         kwargs.pop('groups', None)
         super().__init__(**kwargs)
 
-# --- Load Model ---
 @st.cache_resource
 def load_model():
     model_name = 'best_hiragana_smart_model.h5'
@@ -159,7 +155,6 @@ def load_class_names():
         'u', 'wa', 'wo', 'ya', 'yo', 'yu'
     ]
 
-# --- Preprocessing ---
 def import_and_predict(image_data, model):
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
     if image.mode != "L": image = image.convert("L")
@@ -173,7 +168,6 @@ def import_and_predict(image_data, model):
 model = load_model()
 class_names = load_class_names()
 
-# Sidebar Stats
 with st.sidebar:
     st.markdown("### 🌸 สรุปข้อมูล")
     total_w, checked_w = get_stats()
@@ -182,11 +176,9 @@ with st.sidebar:
     if st.button("รีเฟรชข้อมูล"):
         st.rerun()
 
-# Header
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
 st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2</div>', unsafe_allow_html=True)
 
-# Filter Logic
 query_params = st.query_params
 target_work_id = query_params.get("work_id", None)
 
@@ -203,27 +195,30 @@ work_list = get_work_list(filter_option)
 if len(work_list) > 0:
     id_list = [row[0] for row in work_list]
     
-    # Sync index with target_work_id if present
     if target_work_id and int(target_work_id) in id_list:
         if 'current_index' not in st.session_state or id_list[st.session_state.current_index] != int(target_work_id):
             st.session_state.current_index = id_list.index(int(target_work_id))
     elif 'current_index' not in st.session_state:
         st.session_state.current_index = 0
     
-    # Safety Check Bounds
     if st.session_state.current_index >= len(id_list): st.session_state.current_index = 0
     
     current_id = id_list[st.session_state.current_index]
     
-    # Display Work
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.caption(f"Work ID: {current_id} | ลำดับที่ {st.session_state.current_index + 1}/{len(id_list)}")
 
+    # --- ดึงข้อมูล BLOB มาแปลง ---
     data_row = get_work_data(current_id)
     if data_row:
         blob_data, saved_result, saved_conf, true_label = data_row
-        try: image = Image.open(io.BytesIO(blob_data))
-        except: image = None
+        
+        # แปลง BLOB -> Image
+        try: 
+            image = Image.open(io.BytesIO(blob_data))
+        except Exception as e: 
+            image = None
+            st.error(f"Image Error: {e}")
 
         if image:
             col_img, col_res = st.columns([1, 1.2], gap="large")
@@ -234,9 +229,7 @@ if len(work_list) > 0:
             with col_res:
                 st.markdown("**ผลการตรวจ**")
                 
-                # Logic แสดงผล
                 if saved_result:
-                    # Parse result string "あ (a)"
                     parts = saved_result.split(' ')
                     char_part = parts[0]
                     romaji_part = parts[1] if len(parts) > 1 else ''
@@ -249,7 +242,7 @@ if len(work_list) > 0:
                     </div>""", unsafe_allow_html=True)
                     
                     st.write("")
-                    if st.button("🔄 ตรวจใหม่", type="secondary", use_container_width=True, key=f"rechk_{current_id}"):
+                    if st.button("🔄 ตรวจใหม่", type="secondary", key=f"rechk_{current_id}"):
                         update_database(current_id, None, 0)
                         st.rerun()
                 else:
@@ -259,7 +252,7 @@ if len(work_list) > 0:
                     </div>""", unsafe_allow_html=True)
                     
                     st.write("")
-                    if st.button("✨ วิเคราะห์ด้วย AI", type="primary", use_container_width=True, key=f"ai_{current_id}"):
+                    if st.button("✨ วิเคราะห์ด้วย AI", type="primary", key=f"ai_{current_id}"):
                         if model:
                             with st.spinner("AI กำลังคิด..."):
                                 try:
@@ -268,7 +261,7 @@ if len(work_list) > 0:
                                     conf = np.max(preds) * 100
                                     res_code = class_names[idx] if idx < len(class_names) else "Unknown"
                                     
-                                    # Mapping
+                                    # Hiragana Map
                                     hiragana_map = {
                                         'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
                                         'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
@@ -283,7 +276,6 @@ if len(work_list) > 0:
                                     }
                                     final_res = hiragana_map.get(res_code, res_code)
                                     
-                                    # Save to DB
                                     if update_database(current_id, final_res, conf):
                                         st.success("บันทึกแล้ว!")
                                         time.sleep(0.5)
@@ -295,7 +287,6 @@ if len(work_list) > 0:
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Navigation Buttons
     c_prev, c_space, c_next = st.columns([1, 0.2, 1])
     with c_prev:
         if st.button("⬅️ ก่อนหน้า", use_container_width=True):
@@ -312,14 +303,13 @@ if len(work_list) > 0:
             st.rerun()
 
 else:
-    st.info("🎉 ไม่พบข้อมูลงานในโหมดนี้ (หรือฐานข้อมูลเชื่อมต่อไม่ได้)")
+    st.info("🎉 ไม่พบข้อมูลงานในโหมดนี้")
 
-# Footer
 st.markdown("""
 <div style="text-align: center; margin-top: 50px;">
     <a href="https://www.cedubru.com/hiragana/teacher.php" target="_self" 
        style="color:#D72638; text-decoration:none; font-weight:bold; background:white; padding:10px 20px; border-radius:30px; box-shadow:0 4px 10px rgba(0,0,0,0.1);">
-       🏠 กลับสู่หน้าหลักครู
+       🏠 กลับสู่หน้าอัปโหลด
     </a>
 </div>
 """, unsafe_allow_html=True)
