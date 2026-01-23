@@ -5,3 +5,4 @@ Pillow
 mysql-connector-python
 gdown
 opencv-python-headless
+matplotlib
