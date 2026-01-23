@@ -124,13 +124,13 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
         kwargs.pop('groups', None)  # ลบ 'groups' ทิ้ง ถ้าเจอมัน
         super().__init__(**kwargs)
 
-# --- 🔥 ส่วนโหลดโมเดล 🔥 ---
+# --- 🔥 ส่วนโหลดโมเดล (ปรับปรุงใหม่) 🔥 ---
 @st.cache_resource
 def load_model():
     model_name = 'best_hiragana_smart_model.h5'
     
-    # File ID โมเดล MobileNetV2
-    file_id = '1t6Mu4qe5JVJdtkLmH7lOV7B2If0w3nLc' 
+    # 👇👇👇 ใส่ File ID โมเดล MobileNetV2 ของคุณตรงนี้ 👇👇👇
+    file_id = '1gcqpDUAdgGTeh1dW9s3ODsvSwNvmQLXs' 
     
     url = f'https://drive.google.com/uc?id={file_id}'
     
@@ -170,33 +170,22 @@ def load_class_names():
         'u', 'wa', 'wo', 'ya', 'yo', 'yu'
     ]
 
-# --- 🟢 PREPROCESSING (ปรับปรุงใหม่ แก้ปัญหา Confidence ต่ำ) ---
+# --- 🟢 Preprocessing (แก้ไข: ปรับปรุงให้รองรับปากกาทุกสี) ---
 def import_and_predict(image_data, model):
-    # 1. จัดการเรื่องขนาดภาพ
+    # 1. ปรับขนาดภาพ
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
     
-    # 2. จัดการเรื่องสีพื้นหลังโปร่งใส (Transparency)
-    # ถ้าภาพเป็น RGBA (มีพื้นใส) ให้เทสีขาวลงไปก่อน
-    if image.mode == 'RGBA':
-        background = Image.new("RGB", image.size, (255, 255, 255))
-        background.paste(image, mask=image.split()[3]) # 3 is alpha channel
-        image = background
-    else:
-        image = image.convert("RGB")
-
-    # 3. แปลงเป็น Numpy Array
-    img_array = np.array(image)
-
-    # 4. 🔥 AUTO-INVERT LOGIC (แก้ปัญหาหลัก) 🔥
-    # ตรวจสอบว่าภาพเป็น "พื้นขาว" หรือไม่? ถ้าใช่ ให้กลับสีเป็น "พื้นดำ ตัวขาว"
-    # MobileNet เรียนรู้ได้ดีกว่าถ้า Input เหมือน MNIST (ดำพื้นขาว) หรือ Inverted (ขาวพื้นดำ)
-    if np.mean(img_array) > 127:  # ถ้าค่าเฉลี่ยความสว่าง > 127 แสดงว่าเป็นพื้นขาว
-        img_array = 255 - img_array # กลับสีทันที
-
-    # 5. Preprocess ตามสูตร MobileNetV2 (แปลงค่าเป็น -1 ถึง 1)
-    img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array.astype(np.float32))
-
-    # 6. เพิ่มมิติ Batch
+    # 2. แก้ปัญหาเรื่องสี: แปลงเป็นขาวดำ (Grayscale) ก่อน
+    if image.mode != "L":
+        image = image.convert("L")
+    
+    # 3. แปลงกลับเป็น RGB (เพราะ MobileNetV2 ต้องการ Input 3 Channels)
+    # ผลลัพธ์คือภาพ RGB ที่มีแต่สีเทา (R=G=B) ช่วยลด Bias เรื่องสีปากกา
+    image = image.convert("RGB")
+    
+    # 4. แปลงเป็น Array และ Preprocess
+    img_array = np.asarray(image).astype(np.float32)
+    img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
     img_array = np.expand_dims(img_array, axis=0)
     
     return model.predict(img_array)
@@ -261,17 +250,11 @@ if len(work_list) > 0:
                     parts = saved_result.split(' ')
                     char_part = parts[0]
                     romaji_part = parts[1] if len(parts) > 1 else ''
-                    
-                    # Color Logic for Confidence
-                    conf_color = "green"
-                    if saved_conf < 50: conf_color = "red"
-                    elif saved_conf < 80: conf_color = "orange"
-
                     st.markdown(f"""
                     <div class="result-card">
                         <div style="font-size:1.2rem; color:#555;">{romaji_part}</div>
                         <div class="big-char">{char_part}</div>
-                        <div style="color:{conf_color}; font-weight:bold;">{saved_conf:.1f}%</div>
+                        <div style="color:green; font-weight:bold;">{saved_conf:.1f}%</div>
                     </div>""", unsafe_allow_html=True)
                     st.write("")
                     if st.button("🔄 ตรวจใหม่", type="secondary", use_container_width=True):
