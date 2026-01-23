@@ -249,7 +249,7 @@ def load_model():
     # ⚠️ ตรวจสอบว่าไฟล์โมเดลชื่อนี้มีอยู่ใน saved_models หรือยัง
     model_name = 'hiragana_mobilenetv2_final.h5' 
     # ถ้าจะใช้ไฟล์ ID เดิมจาก GDrive ให้แก้ตรงนี้ แต่แนะนำให้ Upload ไฟล์ใหม่ขึ้น Server หรือแก้ ID
-    file_id = '1g6MqXR8rg2gvjaFZNC2xkQ4GhNGFVqK3' 
+    file_id = '1ITMLg1ljB1Nb4fJWzzPyyf00Dlc1R5p5' 
     url = f'https://drive.google.com/uc?id={file_id}'
     
     if not os.path.exists(model_name):
