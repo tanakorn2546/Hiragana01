@@ -130,8 +130,8 @@ def load_model():
     model_name = 'best_hiragana_smart_model.h5'
     
     # 👇👇👇 ใส่ File ID โมเดล MobileNetV2 ของคุณตรงนี้ 👇👇👇
-    file_id = '1eNVhs-IXQC5KaUtJKm1KrFyqPSwNVDq9' 
-    # ตัวอย่าง: '1eNVhs-IXQC5KaUtJKm1KrFyqPSwNVDq9'
+    file_id = '1gcqpDUAdgGTeh1dW9s3ODsvSwNvmQLXs' 
+    # ตัวอย่าง: '1gcqpDUAdgGTeh1dW9s3ODsvSwNvmQLXs'
     
     url = f'https://drive.google.com/uc?id={file_id}'
     
