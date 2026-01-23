@@ -244,6 +244,13 @@ def get_stats():
         return total, checked
     except: return 0, 0
 
+# --- 🔥 ส่วนแก้ไข: สร้าง Class เพื่อแก้ปัญหา Version Mismatch 🔥 ---
+# คลาสนี้จะทำการลบ 'groups' ออกจาก config ก่อนที่จะส่งให้ DepthwiseConv2D ของ Keras
+class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
+    def __init__(self, **kwargs):
+        kwargs.pop('groups', None)  # ลบ groups ที่เป็นปัญหาทิ้ง
+        super().__init__(**kwargs)
+
 @st.cache_resource
 def load_model():
     # ⚠️ ตรวจสอบว่าไฟล์โมเดลชื่อนี้มีอยู่ใน saved_models หรือยัง
@@ -258,13 +265,18 @@ def load_model():
             model_name = local_path
         else:
             try: 
-                # ถ้าหาไม่เจอจริงๆ ให้ลองโหลด (แต่ถ้า ID ผิดอาจจะได้ไฟล์เก่ามา)
+                # ถ้าหาไม่เจอจริงๆ ให้ลองโหลด
                 gdown.download(url, model_name, quiet=False)
             except: 
                 return None
     
     try: 
-        return tf.keras.models.load_model(model_name, compile=False)
+        # 🔥 แก้ไขตรงนี้: เพิ่ม custom_objects เพื่อใช้ Class ที่เราแก้ไว้
+        return tf.keras.models.load_model(
+            model_name, 
+            compile=False, 
+            custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D}
+        )
     except Exception as e:
         st.error(f"โหลดโมเดลไม่สำเร็จ: {e}")
         return None
