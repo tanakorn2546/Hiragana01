@@ -1,8 +1,6 @@
 streamlit
-tensorflow
+tensorflow>=2.15.0
 numpy
-Pillow
+pillow
 mysql-connector-python
 gdown
-opencv-python-headless
-matplotlib
