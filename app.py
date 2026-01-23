@@ -244,73 +244,52 @@ def get_stats():
         return total, checked
     except: return 0, 0
 
-# --- 🔥 ส่วนแก้ไข: สร้าง Class เพื่อแก้ปัญหา Version Mismatch 🔥 ---
-# คลาสนี้จะทำการลบ 'groups' ออกจาก config ก่อนที่จะส่งให้ DepthwiseConv2D ของ Keras
-class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
-    def __init__(self, **kwargs):
-        kwargs.pop('groups', None)  # ลบ groups ที่เป็นปัญหาทิ้ง
-        super().__init__(**kwargs)
-
+# --- 🔥 ส่วนโหลดโมเดล (แก้ไข: ลบ Class พิเศษทิ้งแล้ว) 🔥 ---
 @st.cache_resource
 def load_model():
-    # ⚠️ ตรวจสอบว่าไฟล์โมเดลชื่อนี้มีอยู่ใน saved_models หรือยัง
-    model_name = 'hiragana_mobilenetv2.h5' 
-    # ถ้าจะใช้ไฟล์ ID เดิมจาก GDrive ให้แก้ตรงนี้ แต่แนะนำให้ Upload ไฟล์ใหม่ขึ้น Server หรือแก้ ID
-    file_id = '1lNGLe-R8TkZVWg-1-ItRK4Gy68Ve9JN9' 
-    url = f'https://drive.google.com/uc?id={file_id}'
+    model_name = 'hiragana_mobilenetv2.h5' # ตรวจสอบชื่อไฟล์ให้ตรงกับที่อัพโหลด
     
-    if not os.path.exists(model_name):
-        local_path = os.path.join('saved_models', model_name)
-        if os.path.exists(local_path): 
-            model_name = local_path
-        else:
-            try: 
-                # ถ้าหาไม่เจอจริงๆ ให้ลองโหลด
-                gdown.download(url, model_name, quiet=False)
-            except: 
-                return None
+    # ถ้าหาไม่เจอให้ใช้ path เต็ม (ถ้ามี)
+    local_path = os.path.join('saved_models', model_name)
+    if os.path.exists(local_path):
+        model_name = local_path
     
-    try: 
-        # 🔥 แก้ไขตรงนี้: เพิ่ม custom_objects เพื่อใช้ Class ที่เราแก้ไว้
-        return tf.keras.models.load_model(
-            model_name, 
-            compile=False, 
-            custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D}
-        )
+    try:
+        # โหลดโมเดลแบบปกติ (เพราะเราเทรนใหม่แล้ว ไม่ต้องใช้ custom objects)
+        return tf.keras.models.load_model(model_name, compile=False)
     except Exception as e:
         st.error(f"โหลดโมเดลไม่สำเร็จ: {e}")
         return None
 
 def load_class_names():
-    # 46 ตัวอักษรพื้นฐาน
+    # ⚠️ แก้ไข: เรียงตามตัวอักษรภาษาอังกฤษ (Alphabetical Order)
+    # เพื่อให้ตรงกับที่ ImageDataGenerator เรียงโฟลเดอร์ตอนเทรน
     return [
-        'a', 'i', 'u', 'e', 'o', 'ka', 'ki', 'ku', 'ke', 'ko',
-        'sa', 'shi', 'su', 'se', 'so', 'ta', 'chi', 'tsu', 'te', 'to',
-        'na', 'ni', 'nu', 'ne', 'no', 'ha', 'hi', 'fu', 'he', 'ho',
-        'ma', 'mi', 'mu', 'me', 'mo', 'ya', 'yu', 'yo',
-        'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'n'
+        'a', 'chi', 'e', 'fu', 'ha', 'he', 'hi', 'ho', 'i', 
+        'ka', 'ke', 'ki', 'ko', 'ku', 'ma', 'me', 'mi', 'mo', 'mu', 
+        'n', 'na', 'ne', 'ni', 'no', 'nu', 'o', 
+        'ra', 're', 'ri', 'ro', 'ru', 
+        'sa', 'se', 'shi', 'so', 'su', 
+        'ta', 'te', 'to', 'tsu', 
+        'u', 'wa', 'wo', 'ya', 'yo', 'yu'
     ]
 
-# --- 🟢 ส่วนสำคัญ: Preprocessing สำหรับ MobileNetV2 ---
+# --- 🟢 ส่วน Preprocessing ---
 def import_and_predict(image_data, model):
     # 1. Resize ภาพให้เป็น 224x224 (ตามที่เทรนมา)
-    # ใช้ LANCZOS เพื่อคุณภาพที่ดีที่สุดเมื่อย่อ/ขยาย
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
 
-    # 2. แปลงเป็น RGB เสมอ (MobileNetV2 ต้องการ 3 Channels)
-    # ต่อให้ภาพต้นฉบับเป็นขาวดำ ก็ต้องแปลงเป็น RGB
+    # 2. แปลงเป็น RGB เสมอ
     if image.mode != "RGB":
         image = image.convert("RGB")
 
     # 3. แปลงเป็น Numpy Array
     img_array = np.asarray(image).astype(np.float32)
 
-    # 4. Preprocessing แบบ MobileNetV2
-    # ฟังก์ชันนี้จะปรับค่า Pixel ให้อยู่ระหว่าง -1 ถึง 1
-    # ซึ่งเป็นรูปแบบเดียวกับที่โมเดลถูกเทรนมา (สำคัญมาก!)
+    # 4. Preprocessing แบบ MobileNetV2 (-1 to 1)
     img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
 
-    # 5. เพิ่มมิติ Batch (จาก (224, 224, 3) เป็น (1, 224, 224, 3))
+    # 5. เพิ่มมิติ Batch
     img_array = np.expand_dims(img_array, axis=0)
 
     return model.predict(img_array)
@@ -414,7 +393,11 @@ if len(work_list) > 0:
                                     idx = np.argmax(preds)
                                     conf = np.max(preds) * 100
                                     
-                                    res_code = class_names[idx] if idx < len(class_names) else "Unknown"
+                                    # ป้องกัน Index เกิน
+                                    if idx < len(class_names):
+                                        res_code = class_names[idx]
+                                    else:
+                                        res_code = "Unknown"
                                     
                                     # Mapping ภาษาญี่ปุ่น
                                     hiragana_map = {
