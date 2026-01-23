@@ -246,27 +246,36 @@ def get_stats():
 
 @st.cache_resource
 def load_model():
-    # ⚠️ ตรวจสอบว่าไฟล์โมเดลชื่อนี้มีอยู่ใน saved_models หรือยัง
     model_name = 'hiragana_mobilenetv2_final.h5' 
-    # ถ้าจะใช้ไฟล์ ID เดิมจาก GDrive ให้แก้ตรงนี้ แต่แนะนำให้ Upload ไฟล์ใหม่ขึ้น Server หรือแก้ ID
+    # ใช้ ID ไฟล์ใหม่ที่คุณให้มา (ตรวจสอบให้แน่ใจว่าเป็นไฟล์ MobileNetV2 จริงๆ)
     file_id = '1ITMLg1ljB1Nb4fJWzzPyyf00Dlc1R5p5' 
     url = f'https://drive.google.com/uc?id={file_id}'
     
-    if not os.path.exists(model_name):
-        local_path = os.path.join('saved_models', model_name)
-        if os.path.exists(local_path): 
-            model_name = local_path
-        else:
-            try: 
-                # ถ้าหาไม่เจอจริงๆ ให้ลองโหลด (แต่ถ้า ID ผิดอาจจะได้ไฟล์เก่ามา)
-                gdown.download(url, model_name, quiet=False)
-            except: 
-                return None
+    # ตรวจสอบโฟลเดอร์ saved_models
+    if not os.path.exists('saved_models'):
+        os.makedirs('saved_models')
+        
+    local_path = os.path.join('saved_models', model_name)
+
+    # ถ้ายังไม่มีไฟล์ หรือไฟล์มีปัญหา ให้โหลดใหม่
+    if not os.path.exists(local_path):
+        try: 
+            gdown.download(url, local_path, quiet=False)
+        except Exception as e: 
+            st.error(f"ดาวน์โหลดโมเดลไม่สำเร็จ: {e}")
+            return None
     
     try: 
-        return tf.keras.models.load_model(model_name, compile=False)
+        model = tf.keras.models.load_model(local_path, compile=False)
+        # ตรวจสอบ Input Shape เพื่อยืนยันว่าเป็น MobileNetV2
+        # print(f"Model loaded. Input shape: {model.input_shape}") 
+        return model
     except Exception as e:
-        st.error(f"โหลดโมเดลไม่สำเร็จ: {e}")
+        st.error(f"โหลดโมเดลเข้าสู่ระบบไม่สำเร็จ: {e}")
+        # ถ้าโหลดไม่ได้ อาจเป็นเพราะไฟล์เสีย แนะนำให้ลบไฟล์แล้วโหลดใหม่
+        if os.path.exists(local_path):
+            os.remove(local_path)
+            st.warning("⚠️ ลบไฟล์โมเดลที่เสียหายแล้ว กรุณารีเฟรชหน้าเว็บเพื่อดาวน์โหลดใหม่")
         return None
 
 def load_class_names():
@@ -281,8 +290,7 @@ def load_class_names():
 
 # --- 🟢 ส่วนสำคัญ: Preprocessing สำหรับ MobileNetV2 ---
 def import_and_predict(image_data, model):
-    # 1. Resize ภาพให้เป็น 224x224 (ตามที่เทรนมา)
-    # ใช้ LANCZOS เพื่อคุณภาพที่ดีที่สุดเมื่อย่อ/ขยาย
+    # 1. Resize ภาพให้เป็น 224x224 (ตามที่เทรนมาสำหรับ MobileNetV2)
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
 
     # 2. แปลงเป็น RGB เสมอ (MobileNetV2 ต้องการ 3 Channels)
@@ -293,12 +301,10 @@ def import_and_predict(image_data, model):
     # 3. แปลงเป็น Numpy Array
     img_array = np.asarray(image).astype(np.float32)
 
-    # 4. Preprocessing แบบ MobileNetV2
-    # ฟังก์ชันนี้จะปรับค่า Pixel ให้อยู่ระหว่าง -1 ถึง 1
-    # ซึ่งเป็นรูปแบบเดียวกับที่โมเดลถูกเทรนมา (สำคัญมาก!)
+    # 4. Preprocessing แบบ MobileNetV2 (-1 ถึง 1)
     img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
 
-    # 5. เพิ่มมิติ Batch (จาก (224, 224, 3) เป็น (1, 224, 224, 3))
+    # 5. เพิ่มมิติ Batch (1, 224, 224, 3)
     img_array = np.expand_dims(img_array, axis=0)
 
     return model.predict(img_array)
