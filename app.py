@@ -44,9 +44,7 @@ def local_css():
         }
         .hero-subtitle { text-align: center; color: #555; margin-bottom: 30px; }
         
-        /* Quiz Mode Specific */
-        .quiz-mode .big-char { color: var(--quiz-purple); }
-        .quiz-mode .result-card { border-top-color: var(--quiz-purple); }
+        .stButton button { border-radius: 12px !important; font-weight: 600 !important; border: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -83,7 +81,7 @@ def get_work_data(target_id, table_name="progress"):
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        # ใช้ F-String สำหรับชื่อตาราง (Internal Use Only - Safe enough here)
+        # ใช้ F-String สำหรับชื่อตาราง (ระวัง SQL Injection แต่ในที่นี้เราคุมตัวแปร table_name เอง)
         sql = f"SELECT image_data, ai_result, ai_confidence, char_code FROM {table_name} WHERE id = %s"
         cursor.execute(sql, (target_id,))
         data = cursor.fetchone()
@@ -196,10 +194,15 @@ if req_quiz_id:
     is_single_view = True
     mode_color = "#7c3aed" # Purple for quiz
     st.markdown(f"""
-    <div style="background:#f3e8ff; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold;">
+    <div style="background:#f3e8ff; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         📝 กำลังตรวจ: แบบทดสอบ (Quiz ID: {current_id})
     </div>
-    <style>.stApp {{ background: linear-gradient(180deg, #f3e8ff 0%, #fff 60%, #fff 100%) !important; }}</style>
+    <style>
+        .stApp {{ background: linear-gradient(180deg, #f3e8ff 0%, #fff 60%, #fff 100%) !important; }}
+        .big-char {{ color: {mode_color} !important; }}
+        .result-card {{ border-top-color: {mode_color} !important; }}
+        div[data-testid="stVerticalBlock"] .stButton button {{ background: {mode_color} !important; }}
+    </style>
     """, unsafe_allow_html=True)
 
 elif req_work_id:
@@ -208,9 +211,12 @@ elif req_work_id:
     active_table = "progress"
     is_single_view = True
     st.markdown(f"""
-    <div style="background:#ffebee; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold;">
+    <div style="background:#ffebee; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         ✍️ กำลังตรวจ: แบบฝึกหัด (Work ID: {current_id})
     </div>
+    <style>
+        div[data-testid="stVerticalBlock"] .stButton button {{ background: {mode_color} !important; }}
+    </style>
     """, unsafe_allow_html=True)
 
 # --- Logic การแสดงผล ---
@@ -240,9 +246,9 @@ if is_single_view:
                         char_part = parts[0]
                         romaji_part = parts[1] if len(parts) > 1 else ''
                         st.markdown(f"""
-                        <div class="result-card" style="border-top-color: {mode_color};">
+                        <div class="result-card">
                             <div style="font-size:1.2rem; color:#555;">{romaji_part}</div>
-                            <div class="big-char" style="color: {mode_color};">{char_part}</div>
+                            <div class="big-char">{char_part}</div>
                             <div style="color:green; font-weight:bold;">{saved_conf:.1f}%</div>
                         </div>""", unsafe_allow_html=True)
                         
@@ -252,7 +258,7 @@ if is_single_view:
                             st.rerun()
                     else:
                         st.markdown(f"""
-                        <div class="result-card" style="border: 2px dashed #ddd; background:#fffaf0; border-top-color: {mode_color};">
+                        <div class="result-card" style="border: 2px dashed #ddd; background:#fffaf0;">
                             <h1 style="color:{mode_color}; opacity:0.5;">⏳</h1><p style="color:#888;">รอผล...</p>
                         </div>""", unsafe_allow_html=True)
                         
@@ -329,9 +335,16 @@ else:
                             st.rerun()
                     else:
                         if st.button("✨ วิเคราะห์", key=f"an_{browse_id}"):
-                            # (Logic ทำซ้ำเหมือนข้างบน - ย่อรูปเพื่อความกระชับ)
-                            pass 
-                            st.info("กรุณากดตรวจในโหมด Single View จะแสดงผลสวยกว่าครับ")
+                            # (Logic ทำซ้ำเหมือนข้างบน - ในโหมด Browse จะไม่เน้นมาก)
+                            if model:
+                                with st.spinner("AI Thinking..."):
+                                    preds = import_and_predict(image, model)
+                                    idx = np.argmax(preds)
+                                    conf = np.max(preds) * 100
+                                    res_code = class_names[idx]
+                                    final_res = f"{res_code} ({conf:.1f}%)"
+                                    update_database(browse_id, "progress", final_res, conf)
+                                    st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
         
         # Navigation
