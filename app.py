@@ -50,13 +50,22 @@ def local_css():
 
 local_css()
 
-# --- 3. Database Functions ---
+# --- 3. Database Configuration & Functions ---
 
-# 🔧 CONFIG: ตั้งค่าชื่อคอลัมน์ของแต่ละตารางที่นี่
-# ถ้าตาราง quiz_submissions ใช้ชื่อคอลัมน์เก็บตัวอักษรว่า 'question' หรือ 'answer' ให้แก้ตรงนี้
-TABLE_COLUMNS = {
-    "progress": "char_code",          # ตารางแบบฝึกหัด ใช้ char_code
-    "quiz_submissions": "char_code"   # <--- ตรวจสอบชื่อคอลัมน์นี้ใน Database ของคุณ (อาจจะเป็น correct_answer หรือ char_text)
+# 🔧 ตั้งค่าชื่อคอลัมน์ของแต่ละตาราง (แก้ไขให้ตรงกับ Database จริงของคุณ)
+TABLE_CONFIG = {
+    "progress": {
+        "label_col": "char_code",       # ชื่อคอลัมน์เก็บตัวอักษรโจทย์
+        "image_col": "image_data",      # ชื่อคอลัมน์เก็บรูปภาพ
+        "result_col": "ai_result",      # ชื่อคอลัมน์เก็บผล AI
+        "conf_col": "ai_confidence"     # ชื่อคอลัมน์เก็บความมั่นใจ
+    },
+    "quiz_submissions": {
+        "label_col": "char_label",      # ⚠️ ต้องแน่ใจว่าในตาราง quiz_submissions มีคอลัมน์ชื่อนี้
+        "image_col": "image_data",
+        "result_col": "ai_result",      # ⚠️ ต้องเพิ่มคอลัมน์นี้ (ALTER TABLE)
+        "conf_col": "ai_confidence"     # ⚠️ ต้องเพิ่มคอลัมน์นี้ (ALTER TABLE)
+    }
 }
 
 def init_connection():
@@ -68,6 +77,7 @@ def init_connection():
     )
 
 def get_work_list(filter_mode):
+    # ฟังก์ชันนี้ใช้สำหรับโหมด Browse (ตาราง progress)
     try:
         conn = init_connection()
         cursor = conn.cursor()
@@ -88,25 +98,30 @@ def get_work_data(target_id, table_name="progress"):
         conn = init_connection()
         cursor = conn.cursor()
         
-        # เลือกชื่อคอลัมน์ให้ตรงกับตาราง
-        target_char_col = TABLE_COLUMNS.get(table_name, "char_code")
-        
-        # Debug SQL Query
-        sql = f"SELECT image_data, ai_result, ai_confidence, {target_char_col} FROM {table_name} WHERE id = %s"
+        # ดึง Config ชื่อคอลัมน์
+        config = TABLE_CONFIG.get(table_name)
+        if not config:
+            st.error(f"❌ ไม่พบการตั้งค่าสำหรับตาราง {table_name}")
+            return None
+
+        # สร้าง SQL Query แบบ Dynamic
+        sql = f"""
+            SELECT {config['image_col']}, {config['result_col']}, {config['conf_col']}, {config['label_col']} 
+            FROM {table_name} WHERE id = %s
+        """
         
         cursor.execute(sql, (target_id,))
         data = cursor.fetchone()
         conn.close()
         
         if data is None:
-            # ถ้าไม่เจอข้อมูล ให้ลองเช็คว่ามี ID นี้จริงไหม (เพื่อการ Debug)
-            st.warning(f"⚠️ คำสั่ง SQL ทำงานสำเร็จ แต่ไม่พบแถวข้อมูล ID: {target_id} ในตาราง {table_name}")
+            st.warning(f"⚠️ ไม่พบข้อมูล ID: {target_id} ในตาราง {table_name}")
             return None
             
         return data 
     except mysql.connector.Error as err:
         st.error(f"❌ SQL Error: {err}")
-        st.info(f"💡 ข้อแนะนำ: ตรวจสอบว่าตาราง `{table_name}` มีคอลัมน์ชื่อ `{TABLE_COLUMNS.get(table_name, 'char_code')}` หรือไม่?")
+        st.info(f"💡 ข้อแนะนำ: ตรวจสอบว่าตาราง `{table_name}` มีคอลัมน์ครบตามนี้หรือไม่? \n {TABLE_CONFIG[table_name]}")
         return None
     except Exception as e:
         st.error(f"❌ Connection Error: {e}")
@@ -116,9 +131,9 @@ def update_database(target_id, table_name, result, confidence):
     try:
         conn = init_connection()
         cursor = conn.cursor()
+        config = TABLE_CONFIG.get(table_name)
         
-        # ตรวจสอบว่ามีคอลัมน์ ai_result, ai_confidence ในตารางนั้นจริงหรือไม่
-        sql = f"UPDATE {table_name} SET ai_result = %s, ai_confidence = %s WHERE id = %s"
+        sql = f"UPDATE {table_name} SET {config['result_col']} = %s, {config['conf_col']} = %s WHERE id = %s"
         cursor.execute(sql, (result, float(confidence), target_id))
         conn.commit()
         conn.close()
@@ -200,8 +215,8 @@ with st.sidebar:
     st.success(f"ตรวจแล้ว: {checked_w}")
     
     st.markdown("---")
-    st.caption("Database Config Info")
-    st.code(str(TABLE_COLUMNS), language="json")
+    st.caption("Settings Info")
+    st.json(TABLE_CONFIG)
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
 st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2</div>', unsafe_allow_html=True)
@@ -255,7 +270,9 @@ if is_single_view:
         data_row = get_work_data(current_id, active_table)
         
         if data_row:
+            # Unpack ข้อมูลตามลำดับที่ select มา
             blob_data, saved_result, saved_conf, true_label = data_row
+            
             try: image = Image.open(io.BytesIO(blob_data))
             except: image = None
 
@@ -320,13 +337,10 @@ if is_single_view:
                                     except Exception as e: st.error(f"Error: {e}")
                             else: st.error("ไม่พบโมเดล")
                 st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            # กรณีหาไม่เจอ (Message จัดการใน get_work_data แล้ว)
-            st.error(f"❌ ไม่สามารถดึงข้อมูล ID: {current_id} จากตาราง {active_table}")
-            st.info("💡 หากด้านบนขึ้น SQL Error: Unknown Column ให้แก้ตัวแปร TABLE_COLUMNS ในโค้ดบรรทัดที่ 40-43")
+        # กรณีหาไม่เจอ ข้อความจะแสดงใน get_work_data แล้ว
 
 else:
-    # 🟡 Browse Mode
+    # 🟡 Browse Mode (สำหรับ Progress เท่านั้น)
     c1, c2, c3 = st.columns([1, 4, 1])
     with c2:
         filter_option = st.selectbox("โหมด", ["ทั้งหมด (All)", "ยังไม่ตรวจ (Pending)", "ตรวจแล้ว (Analyzed)"], label_visibility="collapsed")
