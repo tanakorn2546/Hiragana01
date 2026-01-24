@@ -127,10 +127,10 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 # --- 🔥 ส่วนโหลดโมเดล (ปรับปรุงใหม่) 🔥 ---
 @st.cache_resource
 def load_model():
-    model_name = 'hiragana_mobilenetv2_full.h5'
+    model_name = 'hiragana_model_best.h5'
     
     # 👇👇👇 ใส่ File ID โมเดล MobileNetV2 ของคุณตรงนี้ 👇👇👇
-    file_id = '1Ij-c4cDJNhsYDFnA6Y40K6j7KmhU3muJ' 
+    file_id = '1fzGPfbpuhvR1nC5pfHAGDLdHu1vHqLBK' 
     
     url = f'https://drive.google.com/uc?id={file_id}'
     
