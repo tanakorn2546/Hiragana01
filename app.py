@@ -158,8 +158,8 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    model_name = 'hiragana_model_best.h5'
-    file_id = '1iPYeqEv8uYBvbcgb90pjHX-0cJBakOrI' 
+    model_name = 'hiragana_model_best2.h5'
+    file_id = '1Q0CFCi_0KFwbes3DhQV4LLVTciP8VmrK' 
     url = f'https://drive.google.com/uc?id={file_id}'
     
     if not os.path.exists(model_name):
