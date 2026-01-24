@@ -6,14 +6,14 @@ import time
 import os
 import mysql.connector
 import io
-import gdown  # ต้องติดตั้ง: pip install gdown
+import gdown
 
 # --- 1. Page Configuration ---
 st.set_page_config(
     page_title="Hiragana Sensei AI",
     page_icon="🌸",
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded" # เปิด Sidebar ไว้ให้เห็นสถานะ
 )
 
 # --- 2. CSS Styling ---
@@ -27,11 +27,10 @@ def local_css():
             background: linear-gradient(180deg, #d4fcff 0%, #fff 60%, #fff 100%);
             background-attachment: fixed;
         }
-        /* Decorations */
         .glass-card {
-            background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(15px);
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px);
             border-radius: 20px; border: 2px solid white; padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-bottom: 20px; position: relative; z-index: 10;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-bottom: 20px;
         }
         .result-card {
             background: white; border-radius: 15px; padding: 20px; text-align: center;
@@ -43,53 +42,38 @@ def local_css():
             text-align: center; text-shadow: 2px 2px 0px white; margin-bottom: 0;
         }
         .hero-subtitle { text-align: center; color: #555; margin-bottom: 30px; }
-        
         .stButton button { border-radius: 12px !important; font-weight: 600 !important; border: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
 local_css()
 
-# --- 3. Database Functions (Updated for Dynamic Table) ---
+# --- 3. Database Functions ---
+# ⚠️ สำคัญ: ตรวจสอบ Host ว่าตรงกับที่ PHP คุณใช้หรือไม่
+DB_CONFIG = {
+    "host": "www.cedubru.com",  # ถ้าเทสในเครื่องแล้วมี XAMPP ให้แก้เป็น "localhost"
+    "user": "cedubruc_hiragana_app",
+    "password": "7gZ8gDJyufzJyzELZkdg",
+    "database": "cedubruc_hiragana_app"
+}
+
 def init_connection():
-    return mysql.connector.connect(
-        host="www.cedubru.com",
-        user="cedubruc_hiragana_app",
-        password="7gZ8gDJyufzJyzELZkdg",
-        database="cedubruc_hiragana_app" 
-    )
+    return mysql.connector.connect(**DB_CONFIG)
 
-# ดึงรายการ (เฉพาะโหมด Browse ปกติ ดึงจาก progress)
-def get_work_list(filter_mode):
-    try:
-        conn = init_connection()
-        cursor = conn.cursor()
-        base_sql = "SELECT id, char_code, ai_result FROM progress WHERE image_data IS NOT NULL"
-        if "ยังไม่ตรวจ" in filter_mode: sql = f"{base_sql} AND ai_result IS NULL ORDER BY id ASC"
-        elif "ตรวจแล้ว" in filter_mode: sql = f"{base_sql} AND ai_result IS NOT NULL ORDER BY id DESC"
-        else: sql = f"{base_sql} ORDER BY id DESC"
-        cursor.execute(sql)
-        data = cursor.fetchall()
-        conn.close()
-        return data
-    except Exception as e:
-        st.error(f"❌ Database Error: {e}")
-        return []
-
-# ✅ แก้ไข: รับ table_name เพื่อเลือกว่าจะดึงจาก progress หรือ quiz_submissions
 def get_work_data(target_id, table_name="progress"):
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        # ใช้ F-String สำหรับชื่อตาราง (ระวัง SQL Injection แต่ในที่นี้เราคุมตัวแปร table_name เอง)
+        # ใช้ Dynamic Query (ระวัง SQL Injection แต่ในที่นี้เราคุมตัวแปร table_name เอง)
         sql = f"SELECT image_data, ai_result, ai_confidence, char_code FROM {table_name} WHERE id = %s"
         cursor.execute(sql, (target_id,))
         data = cursor.fetchone()
         conn.close()
         return data 
-    except: return None
+    except Exception as e:
+        st.sidebar.error(f"DB Error: {e}")
+        return None
 
-# ✅ แก้ไข: อัปเดตตารางตามที่ส่งมา
 def update_database(target_id, table_name, result, confidence):
     try:
         conn = init_connection()
@@ -133,8 +117,7 @@ def load_model():
     
     try:
         return tf.keras.models.load_model(
-            model_name, 
-            compile=False,
+            model_name, compile=False,
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D} 
         )
     except Exception as e:
@@ -143,16 +126,12 @@ def load_model():
 
 def load_class_names():
     return [
-        'a', 'chi', 'e', 'fu', 'ha', 'he', 'hi', 'ho', 'i', 
-        'ka', 'ke', 'ki', 'ko', 'ku', 'ma', 'me', 'mi', 'mo', 'mu', 
-        'n', 'na', 'ne', 'ni', 'no', 'nu', 'o', 
-        'ra', 're', 'ri', 'ro', 'ru', 
-        'sa', 'se', 'shi', 'so', 'su', 
-        'ta', 'te', 'to', 'tsu', 
-        'u', 'wa', 'wo', 'ya', 'yo', 'yu'
+        'a', 'chi', 'e', 'fu', 'ha', 'he', 'hi', 'ho', 'i', 'ka', 'ke', 'ki', 'ko', 'ku', 
+        'ma', 'me', 'mi', 'mo', 'mu', 'n', 'na', 'ne', 'ni', 'no', 'nu', 'o', 
+        'ra', 're', 'ri', 'ro', 'ru', 'sa', 'se', 'shi', 'so', 'su', 
+        'ta', 'te', 'to', 'tsu', 'u', 'wa', 'wo', 'ya', 'yo', 'yu'
     ]
 
-# --- 5. Preprocessing ---
 def import_and_predict(image_data, model):
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
     if image.mode != "L": image = image.convert("L")
@@ -162,200 +141,136 @@ def import_and_predict(image_data, model):
     img_array = np.expand_dims(img_array, axis=0)
     return model.predict(img_array)
 
-# --- 6. Main Application Logic ---
+# --- 6. Main Logic ---
 model = load_model()
 class_names = load_class_names()
 
-# Sidebar Stats
+# Sidebar Debug Info
 with st.sidebar:
-    st.markdown("### 🌸 สรุปข้อมูล (Practice)")
+    st.markdown("### 🔌 Connection Status")
+    st.code(f"Host: {DB_CONFIG['host']}\nDB: {DB_CONFIG['database']}")
+    st.markdown("---")
+    st.markdown("### 🌸 สรุปข้อมูล")
     total_w, checked_w = get_stats()
-    st.info(f"ภาพทั้งหมด: {total_w}")
+    st.info(f"ภาพ (Practice): {total_w}")
     st.success(f"ตรวจแล้ว: {checked_w}")
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
 st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2</div>', unsafe_allow_html=True)
 
-# --- 🔥 ส่วนสำคัญ: ตรวจสอบ URL Parameters ---
+# รับค่า URL Params
 query_params = st.query_params
 req_work_id = query_params.get("work_id", None)
 req_quiz_id = query_params.get("quiz_id", None)
 
-# กำหนดค่าเริ่มต้น
 current_id = None
-active_table = "progress" # Default table
-is_single_view = False
-mode_color = "#D72638" # Red for practice
+active_table = "progress"
+mode_color = "#D72638"
+mode_name = "Practice"
 
 if req_quiz_id:
-    # 🟣 โหมดตรวจแบบทดสอบ (Quiz)
     current_id = req_quiz_id
     active_table = "quiz_submissions"
-    is_single_view = True
-    mode_color = "#7c3aed" # Purple for quiz
+    mode_color = "#7c3aed"
+    mode_name = "Quiz"
     st.markdown(f"""
-    <div style="background:#f3e8ff; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        📝 กำลังตรวจ: แบบทดสอบ (Quiz ID: {current_id})
+    <div style="background:#f3e8ff; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold;">
+        📝 Mode: ตรวจแบบทดสอบ (ID: {current_id})
     </div>
-    <style>
-        .stApp {{ background: linear-gradient(180deg, #f3e8ff 0%, #fff 60%, #fff 100%) !important; }}
-        .big-char {{ color: {mode_color} !important; }}
-        .result-card {{ border-top-color: {mode_color} !important; }}
-        div[data-testid="stVerticalBlock"] .stButton button {{ background: {mode_color} !important; }}
-    </style>
+    <style>.stApp {{ background: linear-gradient(180deg, #f3e8ff 0%, #fff 60%, #fff 100%) !important; }}</style>
     """, unsafe_allow_html=True)
 
 elif req_work_id:
-    # 🔴 โหมดตรวจแบบฝึกหัด (Practice)
     current_id = req_work_id
     active_table = "progress"
-    is_single_view = True
     st.markdown(f"""
-    <div style="background:#ffebee; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        ✍️ กำลังตรวจ: แบบฝึกหัด (Work ID: {current_id})
-    </div>
-    <style>
-        div[data-testid="stVerticalBlock"] .stButton button {{ background: {mode_color} !important; }}
-    </style>
-    """, unsafe_allow_html=True)
+    <div style="background:#ffebee; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold;">
+        ✍️ Mode: ตรวจแบบฝึกหัด (ID: {current_id})
+    </div>""", unsafe_allow_html=True)
 
-# --- Logic การแสดงผล ---
-
-if is_single_view:
-    # ✅ กรณีมี ID ส่งมาจาก PHP (แสดงแค่ใบเดียว)
-    if current_id:
-        data_row = get_work_data(current_id, active_table)
-        
-        if data_row:
-            blob_data, saved_result, saved_conf, true_label = data_row
-            try: image = Image.open(io.BytesIO(blob_data))
-            except: image = None
-
-            if image:
-                st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-                col_img, col_res = st.columns([1, 1.2], gap="large")
-                
-                with col_img:
-                    st.markdown(f"**โจทย์:** `{true_label}`")
-                    st.image(image, use_container_width=True)
-                
-                with col_res:
-                    st.markdown("**ผลการตรวจ**")
-                    if saved_result:
-                        parts = saved_result.split(' ')
-                        char_part = parts[0]
-                        romaji_part = parts[1] if len(parts) > 1 else ''
-                        st.markdown(f"""
-                        <div class="result-card">
-                            <div style="font-size:1.2rem; color:#555;">{romaji_part}</div>
-                            <div class="big-char">{char_part}</div>
-                            <div style="color:green; font-weight:bold;">{saved_conf:.1f}%</div>
-                        </div>""", unsafe_allow_html=True)
-                        
-                        st.write("")
-                        if st.button("🔄 ตรวจใหม่", type="secondary", use_container_width=True):
-                            update_database(current_id, active_table, None, 0)
-                            st.rerun()
-                    else:
-                        st.markdown(f"""
-                        <div class="result-card" style="border: 2px dashed #ddd; background:#fffaf0;">
-                            <h1 style="color:{mode_color}; opacity:0.5;">⏳</h1><p style="color:#888;">รอผล...</p>
-                        </div>""", unsafe_allow_html=True)
-                        
-                        st.write("")
-                        if st.button("✨ วิเคราะห์", type="primary", use_container_width=True):
-                            if model:
-                                with st.spinner("AI กำลังคิด..."):
-                                    try:
-                                        preds = import_and_predict(image, model)
-                                        idx = np.argmax(preds)
-                                        conf = np.max(preds) * 100
-                                        res_code = class_names[idx] if idx < len(class_names) else "Unknown"
-                                        
-                                        hiragana_map = {
-                                            'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
-                                            'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
-                                            'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
-                                            'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
-                                            'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
-                                            'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
-                                            'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
-                                            'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
-                                            'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                            'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
-                                        }
-                                        final_res = hiragana_map.get(res_code, res_code)
-                                        
-                                        # บันทึกลงฐานข้อมูล (Table ตามประเภทงาน)
-                                        update_database(current_id, active_table, final_res, conf)
-                                        time.sleep(0.3)
-                                        st.rerun()
-                                    except Exception as e: st.error(f"Error: {e}")
-                            else: st.error("ไม่พบโมเดล")
-                st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            st.error(f"❌ ไม่พบข้อมูล ID: {current_id} ในตาราง {active_table}")
-
-else:
-    # 🟡 กรณีไม่มี ID (Browse Mode - ดูรายการใน progress ปกติ)
-    c1, c2, c3 = st.columns([1, 4, 1])
-    with c2:
-        filter_option = st.selectbox("โหมด", ["ทั้งหมด (All)", "ยังไม่ตรวจ (Pending)", "ตรวจแล้ว (Analyzed)"], label_visibility="collapsed")
+if current_id:
+    # ดึงข้อมูลตาม ID และ ตารางที่ระบุ
+    data_row = get_work_data(current_id, active_table)
     
-    work_list = get_work_list(filter_option)
+    if data_row:
+        blob_data, saved_result, saved_conf, true_label = data_row
+        try: image = Image.open(io.BytesIO(blob_data))
+        except: image = None
 
-    if len(work_list) > 0:
-        id_list = [row[0] for row in work_list]
-        if 'current_index' not in st.session_state: st.session_state.current_index = 0
-        
-        if st.session_state.current_index >= len(id_list): st.session_state.current_index = 0
-        elif st.session_state.current_index < 0: st.session_state.current_index = len(id_list) - 1
-
-        browse_id = id_list[st.session_state.current_index]
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.caption(f"ID: {browse_id} | {st.session_state.current_index + 1}/{len(id_list)}")
-
-        data_row = get_work_data(browse_id, "progress") # Browse mode defaults to progress
-        if data_row:
-            blob_data, saved_result, saved_conf, true_label = data_row
-            try: image = Image.open(io.BytesIO(blob_data))
-            except: image = None
-
-            if image:
-                col_img, col_res = st.columns([1, 1.2], gap="large")
-                with col_img:
-                    st.markdown(f"**โจทย์:** `{true_label}`")
-                    st.image(image, use_container_width=True)
-                with col_res:
-                    st.markdown("**ผลการตรวจ**")
-                    if saved_result:
-                        st.success(f"{saved_result}\n\nConfidence: {saved_conf:.1f}%")
-                        if st.button("🔄 ตรวจใหม่", key=f"re_{browse_id}"):
-                            update_database(browse_id, "progress", None, 0)
-                            st.rerun()
-                    else:
-                        if st.button("✨ วิเคราะห์", key=f"an_{browse_id}"):
-                            # (Logic ทำซ้ำเหมือนข้างบน - ในโหมด Browse จะไม่เน้นมาก)
-                            if model:
-                                with st.spinner("AI Thinking..."):
+        if image:
+            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+            col_img, col_res = st.columns([1, 1.2], gap="large")
+            
+            with col_img:
+                st.markdown(f"**โจทย์:** `{true_label}`")
+                st.image(image, use_container_width=True)
+            
+            with col_res:
+                st.markdown("**ผลการตรวจ**")
+                if saved_result:
+                    parts = saved_result.split(' ')
+                    char_part = parts[0]
+                    romaji_part = parts[1] if len(parts) > 1 else ''
+                    st.markdown(f"""
+                    <div class="result-card" style="border-top-color: {mode_color};">
+                        <div style="font-size:1.2rem; color:#555;">{romaji_part}</div>
+                        <div class="big-char" style="color:{mode_color};">{char_part}</div>
+                        <div style="color:green; font-weight:bold;">{saved_conf:.1f}%</div>
+                    </div>""", unsafe_allow_html=True)
+                    
+                    st.write("")
+                    if st.button("🔄 ตรวจใหม่", type="secondary", use_container_width=True):
+                        update_database(current_id, active_table, None, 0)
+                        st.rerun()
+                else:
+                    st.markdown(f"""
+                    <div class="result-card" style="border: 2px dashed #ddd; background:#fffaf0; border-top-color:{mode_color};">
+                        <h1 style="color:{mode_color}; opacity:0.5;">⏳</h1><p style="color:#888;">รอผล...</p>
+                    </div>""", unsafe_allow_html=True)
+                    
+                    st.write("")
+                    if st.button("✨ วิเคราะห์", type="primary", use_container_width=True):
+                        if model:
+                            with st.spinner("AI กำลังคิด..."):
+                                try:
                                     preds = import_and_predict(image, model)
                                     idx = np.argmax(preds)
                                     conf = np.max(preds) * 100
-                                    res_code = class_names[idx]
-                                    final_res = f"{res_code} ({conf:.1f}%)"
-                                    update_database(browse_id, "progress", final_res, conf)
+                                    res_code = class_names[idx] if idx < len(class_names) else "Unknown"
+                                    
+                                    hiragana_map = {
+                                        'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
+                                        'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
+                                        'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
+                                        'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
+                                        'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
+                                        'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
+                                        'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
+                                        'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
+                                        'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
+                                        'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
+                                    }
+                                    final_res = hiragana_map.get(res_code, res_code)
+                                    update_database(current_id, active_table, final_res, conf)
+                                    time.sleep(0.3)
                                     st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+                                except Exception as e: st.error(f"Error: {e}")
+                        else: st.error("ไม่พบโมเดล")
+            st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        # กรณีไม่พบข้อมูล ให้แสดงข้อความแจ้งเตือนที่ชัดเจน
+        st.error(f"""
+        ❌ **ไม่พบข้อมูล ID: {current_id} ในตาราง {active_table}**
         
-        # Navigation
-        c_prev, c_space, c_next = st.columns([1, 0.2, 1])
-        with c_prev:
-            if st.button("⬅️ ก่อนหน้า", use_container_width=True):
-                st.session_state.current_index -= 1; st.rerun()
-        with c_next:
-            if st.button("ถัดไป ➡️", use_container_width=True):
-                st.session_state.current_index += 1; st.rerun()
-    else: st.info("ไม่พบข้อมูล")
+        **สาเหตุที่เป็นไปได้:**
+        1. ฐานข้อมูลที่คุณบันทึก (Localhost) ไม่ตรงกับที่ AI อ่าน (Server: {DB_CONFIG['host']})
+        2. คุณลบข้อมูลนี้ไปแล้ว
+        3. มีปัญหาการเชื่อมต่อ
+        """)
+        st.info("💡 คำแนะนำ: หากคุณทดสอบในเครื่อง ให้รันไฟล์นี้ด้วยคำสั่ง `streamlit run app.py` ในเครื่องของคุณเอง")
+
+else:
+    st.info("👋 ยินดีต้อนรับ! กรุณากดปุ่ม 'ตรวจด้วย AI' จากหน้าเว็บหลัก")
 
 # Footer
 st.markdown("""<div style="text-align: center; margin-top: 50px; position:relative; z-index:20;">
