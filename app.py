@@ -6,7 +6,7 @@ import time
 import os
 import mysql.connector
 import io
-import gdown  # ต้องติดตั้ง: pip install gdown
+import gdown
 
 # --- 1. Page Configuration ---
 st.set_page_config(
@@ -50,7 +50,15 @@ def local_css():
 
 local_css()
 
-# --- 3. Database Functions (Updated for Dynamic Table) ---
+# --- 3. Database Functions ---
+
+# 🔧 CONFIG: ตั้งค่าชื่อคอลัมน์ของแต่ละตารางที่นี่
+# ถ้าตาราง quiz_submissions ใช้ชื่อคอลัมน์เก็บตัวอักษรว่า 'question' หรือ 'answer' ให้แก้ตรงนี้
+TABLE_COLUMNS = {
+    "progress": "char_code",          # ตารางแบบฝึกหัด ใช้ char_code
+    "quiz_submissions": "char_code"   # <--- ตรวจสอบชื่อคอลัมน์นี้ใน Database ของคุณ (อาจจะเป็น correct_answer หรือ char_text)
+}
+
 def init_connection():
     return mysql.connector.connect(
         host="www.cedubru.com",
@@ -59,7 +67,6 @@ def init_connection():
         database="cedubruc_hiragana_app" 
     )
 
-# ดึงรายการ (เฉพาะโหมด Browse ปกติ ดึงจาก progress)
 def get_work_list(filter_mode):
     try:
         conn = init_connection()
@@ -73,33 +80,52 @@ def get_work_list(filter_mode):
         conn.close()
         return data
     except Exception as e:
-        st.error(f"❌ Database Error: {e}")
+        st.error(f"❌ Database List Error: {e}")
         return []
 
-# ✅ แก้ไข: รับ table_name เพื่อเลือกว่าจะดึงจาก progress หรือ quiz_submissions
 def get_work_data(target_id, table_name="progress"):
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        # ใช้ F-String สำหรับชื่อตาราง (ระวัง SQL Injection แต่ในที่นี้เราคุมตัวแปร table_name เอง)
-        sql = f"SELECT image_data, ai_result, ai_confidence, char_code FROM {table_name} WHERE id = %s"
+        
+        # เลือกชื่อคอลัมน์ให้ตรงกับตาราง
+        target_char_col = TABLE_COLUMNS.get(table_name, "char_code")
+        
+        # Debug SQL Query
+        sql = f"SELECT image_data, ai_result, ai_confidence, {target_char_col} FROM {table_name} WHERE id = %s"
+        
         cursor.execute(sql, (target_id,))
         data = cursor.fetchone()
         conn.close()
+        
+        if data is None:
+            # ถ้าไม่เจอข้อมูล ให้ลองเช็คว่ามี ID นี้จริงไหม (เพื่อการ Debug)
+            st.warning(f"⚠️ คำสั่ง SQL ทำงานสำเร็จ แต่ไม่พบแถวข้อมูล ID: {target_id} ในตาราง {table_name}")
+            return None
+            
         return data 
-    except: return None
+    except mysql.connector.Error as err:
+        st.error(f"❌ SQL Error: {err}")
+        st.info(f"💡 ข้อแนะนำ: ตรวจสอบว่าตาราง `{table_name}` มีคอลัมน์ชื่อ `{TABLE_COLUMNS.get(table_name, 'char_code')}` หรือไม่?")
+        return None
+    except Exception as e:
+        st.error(f"❌ Connection Error: {e}")
+        return None
 
-# ✅ แก้ไข: อัปเดตตารางตามที่ส่งมา
 def update_database(target_id, table_name, result, confidence):
     try:
         conn = init_connection()
         cursor = conn.cursor()
+        
+        # ตรวจสอบว่ามีคอลัมน์ ai_result, ai_confidence ในตารางนั้นจริงหรือไม่
         sql = f"UPDATE {table_name} SET ai_result = %s, ai_confidence = %s WHERE id = %s"
         cursor.execute(sql, (result, float(confidence), target_id))
         conn.commit()
         conn.close()
         return True
-    except: return False
+    except Exception as e:
+        st.error(f"❌ Update Error: {e}")
+        return False
 
 def get_stats():
     try:
@@ -172,30 +198,33 @@ with st.sidebar:
     total_w, checked_w = get_stats()
     st.info(f"ภาพทั้งหมด: {total_w}")
     st.success(f"ตรวจแล้ว: {checked_w}")
+    
+    st.markdown("---")
+    st.caption("Database Config Info")
+    st.code(str(TABLE_COLUMNS), language="json")
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
 st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2</div>', unsafe_allow_html=True)
 
-# --- 🔥 ส่วนสำคัญ: ตรวจสอบ URL Parameters ---
+# --- 🔥 รับค่า Parameters ---
 query_params = st.query_params
 req_work_id = query_params.get("work_id", None)
 req_quiz_id = query_params.get("quiz_id", None)
 
-# กำหนดค่าเริ่มต้น
 current_id = None
-active_table = "progress" # Default table
+active_table = "progress"
 is_single_view = False
-mode_color = "#D72638" # Red for practice
+mode_color = "#D72638"
 
 if req_quiz_id:
-    # 🟣 โหมดตรวจแบบทดสอบ (Quiz)
+    # 🟣 โหมดตรวจแบบทดสอบ
     current_id = req_quiz_id
     active_table = "quiz_submissions"
     is_single_view = True
-    mode_color = "#7c3aed" # Purple for quiz
+    mode_color = "#7c3aed"
     st.markdown(f"""
     <div style="background:#f3e8ff; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        📝 กำลังตรวจ: แบบทดสอบ (Quiz ID: {current_id})
+        📝 กำลังตรวจ: แบบทดสอบ (Quiz Submission ID: {current_id})
     </div>
     <style>
         .stApp {{ background: linear-gradient(180deg, #f3e8ff 0%, #fff 60%, #fff 100%) !important; }}
@@ -206,7 +235,7 @@ if req_quiz_id:
     """, unsafe_allow_html=True)
 
 elif req_work_id:
-    # 🔴 โหมดตรวจแบบฝึกหัด (Practice)
+    # 🔴 โหมดตรวจแบบฝึกหัด
     current_id = req_work_id
     active_table = "progress"
     is_single_view = True
@@ -222,7 +251,6 @@ elif req_work_id:
 # --- Logic การแสดงผล ---
 
 if is_single_view:
-    # ✅ กรณีมี ID ส่งมาจาก PHP (แสดงแค่ใบเดียว)
     if current_id:
         data_row = get_work_data(current_id, active_table)
         
@@ -286,18 +314,19 @@ if is_single_view:
                                         }
                                         final_res = hiragana_map.get(res_code, res_code)
                                         
-                                        # บันทึกลงฐานข้อมูล (Table ตามประเภทงาน)
-                                        update_database(current_id, active_table, final_res, conf)
-                                        time.sleep(0.3)
-                                        st.rerun()
+                                        if update_database(current_id, active_table, final_res, conf):
+                                            time.sleep(0.3)
+                                            st.rerun()
                                     except Exception as e: st.error(f"Error: {e}")
                             else: st.error("ไม่พบโมเดล")
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
-            st.error(f"❌ ไม่พบข้อมูล ID: {current_id} ในตาราง {active_table}")
+            # กรณีหาไม่เจอ (Message จัดการใน get_work_data แล้ว)
+            st.error(f"❌ ไม่สามารถดึงข้อมูล ID: {current_id} จากตาราง {active_table}")
+            st.info("💡 หากด้านบนขึ้น SQL Error: Unknown Column ให้แก้ตัวแปร TABLE_COLUMNS ในโค้ดบรรทัดที่ 40-43")
 
 else:
-    # 🟡 กรณีไม่มี ID (Browse Mode - ดูรายการใน progress ปกติ)
+    # 🟡 Browse Mode
     c1, c2, c3 = st.columns([1, 4, 1])
     with c2:
         filter_option = st.selectbox("โหมด", ["ทั้งหมด (All)", "ยังไม่ตรวจ (Pending)", "ตรวจแล้ว (Analyzed)"], label_visibility="collapsed")
@@ -315,7 +344,7 @@ else:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         st.caption(f"ID: {browse_id} | {st.session_state.current_index + 1}/{len(id_list)}")
 
-        data_row = get_work_data(browse_id, "progress") # Browse mode defaults to progress
+        data_row = get_work_data(browse_id, "progress")
         if data_row:
             blob_data, saved_result, saved_conf, true_label = data_row
             try: image = Image.open(io.BytesIO(blob_data))
@@ -335,7 +364,6 @@ else:
                             st.rerun()
                     else:
                         if st.button("✨ วิเคราะห์", key=f"an_{browse_id}"):
-                            # (Logic ทำซ้ำเหมือนข้างบน - ในโหมด Browse จะไม่เน้นมาก)
                             if model:
                                 with st.spinner("AI Thinking..."):
                                     preds = import_and_predict(image, model)
@@ -347,7 +375,6 @@ else:
                                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Navigation
         c_prev, c_space, c_next = st.columns([1, 0.2, 1])
         with c_prev:
             if st.button("⬅️ ก่อนหน้า", use_container_width=True):
@@ -357,6 +384,5 @@ else:
                 st.session_state.current_index += 1; st.rerun()
     else: st.info("ไม่พบข้อมูล")
 
-# Footer
 st.markdown("""<div style="text-align: center; margin-top: 50px; position:relative; z-index:20;">
 <a href="https://www.cedubru.com/hiragana/teacher.php" target="_self" style="color:#D72638; text-decoration:none; font-weight:bold; background:rgba(255,255,255,0.8); padding:5px 15px; border-radius:20px;">🏠 กลับสู่หน้าหลัก</a></div>""", unsafe_allow_html=True)
