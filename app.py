@@ -6,7 +6,8 @@ import time
 import os
 import mysql.connector
 import io
-import gdown
+import cv2  # ใช้สำหรับแต่งภาพ
+import gdown # ใช้สำหรับโหลดโมเดลจาก Drive
 
 # --- 1. Page Configuration ---
 st.set_page_config(
@@ -51,20 +52,18 @@ def local_css():
 local_css()
 
 # --- 3. Database Configuration & Functions ---
-
-# 🔧 ตั้งค่าชื่อคอลัมน์ของแต่ละตาราง (แก้ไขให้ตรงกับ Database จริงของคุณ)
 TABLE_CONFIG = {
     "progress": {
-        "label_col": "char_code",       # ชื่อคอลัมน์เก็บตัวอักษรโจทย์
-        "image_col": "image_data",      # ชื่อคอลัมน์เก็บรูปภาพ
-        "result_col": "ai_result",      # ชื่อคอลัมน์เก็บผล AI
-        "conf_col": "ai_confidence"     # ชื่อคอลัมน์เก็บความมั่นใจ
+        "label_col": "char_code",       
+        "image_col": "image_data",      
+        "result_col": "ai_result",      
+        "conf_col": "ai_confidence"     
     },
     "quiz_submissions": {
-        "label_col": "char_label",      # ⚠️ ต้องแน่ใจว่าในตาราง quiz_submissions มีคอลัมน์ชื่อนี้
+        "label_col": "char_label",      
         "image_col": "image_data",
-        "result_col": "ai_result",      # ⚠️ ต้องเพิ่มคอลัมน์นี้ (ALTER TABLE)
-        "conf_col": "ai_confidence"     # ⚠️ ต้องเพิ่มคอลัมน์นี้ (ALTER TABLE)
+        "result_col": "ai_result",      
+        "conf_col": "ai_confidence"     
     }
 }
 
@@ -77,7 +76,6 @@ def init_connection():
     )
 
 def get_work_list(filter_mode):
-    # ฟังก์ชันนี้ใช้สำหรับโหมด Browse (ตาราง progress)
     try:
         conn = init_connection()
         cursor = conn.cursor()
@@ -97,34 +95,19 @@ def get_work_data(target_id, table_name="progress"):
     try:
         conn = init_connection()
         cursor = conn.cursor()
-        
-        # ดึง Config ชื่อคอลัมน์
         config = TABLE_CONFIG.get(table_name)
-        if not config:
-            st.error(f"❌ ไม่พบการตั้งค่าสำหรับตาราง {table_name}")
-            return None
+        if not config: return None
 
-        # สร้าง SQL Query แบบ Dynamic
         sql = f"""
             SELECT {config['image_col']}, {config['result_col']}, {config['conf_col']}, {config['label_col']} 
             FROM {table_name} WHERE id = %s
         """
-        
         cursor.execute(sql, (target_id,))
         data = cursor.fetchone()
         conn.close()
-        
-        if data is None:
-            st.warning(f"⚠️ ไม่พบข้อมูล ID: {target_id} ในตาราง {table_name}")
-            return None
-            
         return data 
-    except mysql.connector.Error as err:
-        st.error(f"❌ SQL Error: {err}")
-        st.info(f"💡 ข้อแนะนำ: ตรวจสอบว่าตาราง `{table_name}` มีคอลัมน์ครบตามนี้หรือไม่? \n {TABLE_CONFIG[table_name]}")
-        return None
     except Exception as e:
-        st.error(f"❌ Connection Error: {e}")
+        st.error(f"❌ Data Fetch Error: {e}")
         return None
 
 def update_database(target_id, table_name, result, confidence):
@@ -132,7 +115,6 @@ def update_database(target_id, table_name, result, confidence):
         conn = init_connection()
         cursor = conn.cursor()
         config = TABLE_CONFIG.get(table_name)
-        
         sql = f"UPDATE {table_name} SET {config['result_col']} = %s, {config['conf_col']} = %s WHERE id = %s"
         cursor.execute(sql, (result, float(confidence), target_id))
         conn.commit()
@@ -150,36 +132,44 @@ def get_stats():
         return cursor.fetchone()
     except: return 0, 0
 
-# --- 4. Model Loading ---
-class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
-    def __init__(self, **kwargs):
-        kwargs.pop('groups', None)
-        super().__init__(**kwargs)
-
+# --- 4. Model Loading (From Google Drive) ---
 @st.cache_resource
 def load_model():
-    model_name = 'hiragana_model_high_conf_v2.h5'
-    file_id = '1b-qEbS4HTMGEPk94agyywztjyP--X749' 
-    url = f'https://drive.google.com/uc?id={file_id}'
+    # ---------------------------------------------------------
+    # ⚠️ TODO: เอา File ID จาก Google Drive ของไฟล์ใหม่มาใส่ตรงนี้
+    # ตัวอย่าง: '1ABC-xyz1234567890abcdefg'
+    GOOGLE_DRIVE_FILE_ID = '1IzUW5KSZHAcx5K2VMuNFzDobuf5_gqeM' 
+    # ---------------------------------------------------------
     
-    if not os.path.exists(model_name):
-        local_path = os.path.join('saved_models', model_name)
-        if os.path.exists(local_path): model_name = local_path
+    model_filename = 'hiragana_mobilenet_v2_optimized.h5'
+    url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
+    
+    # เช็คว่ามีไฟล์ในเครื่องหรือยัง ถ้าไม่มีให้โหลด
+    if not os.path.exists(model_filename):
+        # ลองเช็คในโฟลเดอร์ saved_models เผื่อมี (สำหรับการรัน Local)
+        local_path = os.path.join('saved_models', model_filename)
+        
+        if os.path.exists(local_path):
+            final_path = local_path
         else:
+            # ถ้าไม่มีเลย ให้โหลดจาก Drive
             try:
-                gdown.download(url, model_name, quiet=False)
+                st.info(f"☁️ กำลังดาวน์โหลดโมเดล... (ID: {GOOGLE_DRIVE_FILE_ID})")
+                gdown.download(url, model_filename, quiet=False)
+                final_path = model_filename
+                st.success("✅ ดาวน์โหลดโมเดลสำเร็จ!")
             except Exception as e:
-                st.error(f"❌ Load Error: {e}")
+                st.error(f"❌ Download Error: {e}")
+                st.warning("กรุณาตรวจสอบ File ID และ Permission ของไฟล์ใน Google Drive")
                 return None
-    
+    else:
+        final_path = model_filename
+
     try:
-        return tf.keras.models.load_model(
-            model_name, 
-            compile=False,
-            custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D} 
-        )
+        # โหลดโมเดล
+        return tf.keras.models.load_model(final_path)
     except Exception as e:
-        st.error(f"❌ Model Error: {e}")
+        st.error(f"❌ Model Load Error: {e}")
         return None
 
 def load_class_names():
@@ -193,15 +183,48 @@ def load_class_names():
         'u', 'wa', 'wo', 'ya', 'yo', 'yu'
     ]
 
-# --- 5. Preprocessing ---
+# --- 5. Preprocessing (ปรับให้ตรงกับ Train.py) ---
+def enhance_image_for_prediction(img_array):
+    """
+    ฟังก์ชันแต่งภาพ: ทำให้เส้นหนาและชัดขึ้นก่อนส่งให้ AI
+    """
+    # 1. แปลงเป็น Grayscale
+    if len(img_array.shape) == 3:
+        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    else:
+        gray = img_array
+
+    # 2. Thresholding: ตัดสีเทาอ่อนทิ้ง
+    _, thresh = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
+    
+    # 3. Erosion: ทำให้เส้นหนาขึ้น
+    kernel = np.ones((2, 2), np.uint8)
+    img_thick = cv2.erode(thresh, kernel, iterations=1)
+
+    # 4. แปลงกลับเป็น RGB
+    img_back = cv2.cvtColor(img_thick, cv2.COLOR_GRAY2RGB)
+    
+    # 5. Preprocess ของ MobileNetV2
+    return tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
+
 def import_and_predict(image_data, model):
+    # ปรับขนาดภาพ
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
-    if image.mode != "L": image = image.convert("L")
-    image = image.convert("RGB")
-    img_array = np.asarray(image).astype(np.float32)
-    img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
-    img_array = np.expand_dims(img_array, axis=0)
-    return model.predict(img_array)
+    
+    # แปลงเป็น RGB
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+    
+    # แปลงเป็น Numpy Array
+    img_array = np.array(image)
+    
+    # ✅ เรียกใช้ฟังก์ชันแต่งภาพ
+    processed_img = enhance_image_for_prediction(img_array)
+    
+    # เพิ่มมิติ Batch
+    img_batch = np.expand_dims(processed_img, axis=0)
+    
+    return model.predict(img_batch)
 
 # --- 6. Main Application Logic ---
 model = load_model()
@@ -213,13 +236,10 @@ with st.sidebar:
     total_w, checked_w = get_stats()
     st.info(f"ภาพทั้งหมด: {total_w}")
     st.success(f"ตรวจแล้ว: {checked_w}")
-    
-    st.markdown("---")
-    st.caption("Settings Info")
-    st.json(TABLE_CONFIG)
+    st.caption("v2.1 MobileNet + GDrive")
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Optimized)</div>', unsafe_allow_html=True)
 
 # --- 🔥 รับค่า Parameters ---
 query_params = st.query_params
@@ -264,15 +284,12 @@ elif req_work_id:
     """, unsafe_allow_html=True)
 
 # --- Logic การแสดงผล ---
-
 if is_single_view:
     if current_id:
         data_row = get_work_data(current_id, active_table)
         
         if data_row:
-            # Unpack ข้อมูลตามลำดับที่ select มา
             blob_data, saved_result, saved_conf, true_label = data_row
-            
             try: image = Image.open(io.BytesIO(blob_data))
             except: image = None
 
@@ -337,10 +354,9 @@ if is_single_view:
                                     except Exception as e: st.error(f"Error: {e}")
                             else: st.error("ไม่พบโมเดล")
                 st.markdown('</div>', unsafe_allow_html=True)
-        # กรณีหาไม่เจอ ข้อความจะแสดงใน get_work_data แล้ว
 
 else:
-    # 🟡 Browse Mode (สำหรับ Progress เท่านั้น)
+    # 🟡 Browse Mode
     c1, c2, c3 = st.columns([1, 4, 1])
     with c2:
         filter_option = st.selectbox("โหมด", ["ทั้งหมด (All)", "ยังไม่ตรวจ (Pending)", "ตรวจแล้ว (Analyzed)"], label_visibility="collapsed")
