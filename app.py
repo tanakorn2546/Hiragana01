@@ -52,7 +52,6 @@ local_css()
 
 # --- 3. Database Configuration & Functions ---
 
-# 🔧 ตั้งค่าชื่อคอลัมน์ของแต่ละตาราง (แก้ไขให้ตรงกับ Database จริงของคุณ)
 TABLE_CONFIG = {
     "progress": {
         "label_col": "char_code",       # ชื่อคอลัมน์เก็บตัวอักษรโจทย์
@@ -61,10 +60,10 @@ TABLE_CONFIG = {
         "conf_col": "ai_confidence"     # ชื่อคอลัมน์เก็บความมั่นใจ
     },
     "quiz_submissions": {
-        "label_col": "char_label",      # ⚠️ ต้องแน่ใจว่าในตาราง quiz_submissions มีคอลัมน์ชื่อนี้
+        "label_col": "char_label",
         "image_col": "image_data",
-        "result_col": "ai_result",      # ⚠️ ต้องเพิ่มคอลัมน์นี้ (ALTER TABLE)
-        "conf_col": "ai_confidence"     # ⚠️ ต้องเพิ่มคอลัมน์นี้ (ALTER TABLE)
+        "result_col": "ai_result",
+        "conf_col": "ai_confidence"
     }
 }
 
@@ -72,12 +71,11 @@ def init_connection():
     return mysql.connector.connect(
         host="www.cedubru.com",
         user="cedubruc_hiragana_app",
-        password="7gZ8gDJyufzJyzELZkdg",
+        password="YOUR_DB_PASSWORD", # ⚠️⚠️⚠️ อย่าลืมแก้รหัสผ่านตรงนี้ให้ถูกต้องนะครับ ⚠️⚠️⚠️
         database="cedubruc_hiragana_app" 
     )
 
 def get_work_list(filter_mode):
-    # ฟังก์ชันนี้ใช้สำหรับโหมด Browse (ตาราง progress)
     try:
         conn = init_connection()
         cursor = conn.cursor()
@@ -98,13 +96,11 @@ def get_work_data(target_id, table_name="progress"):
         conn = init_connection()
         cursor = conn.cursor()
         
-        # ดึง Config ชื่อคอลัมน์
         config = TABLE_CONFIG.get(table_name)
         if not config:
             st.error(f"❌ ไม่พบการตั้งค่าสำหรับตาราง {table_name}")
             return None
 
-        # สร้าง SQL Query แบบ Dynamic
         sql = f"""
             SELECT {config['image_col']}, {config['result_col']}, {config['conf_col']}, {config['label_col']} 
             FROM {table_name} WHERE id = %s
@@ -121,7 +117,6 @@ def get_work_data(target_id, table_name="progress"):
         return data 
     except mysql.connector.Error as err:
         st.error(f"❌ SQL Error: {err}")
-        st.info(f"💡 ข้อแนะนำ: ตรวจสอบว่าตาราง `{table_name}` มีคอลัมน์ครบตามนี้หรือไม่? \n {TABLE_CONFIG[table_name]}")
         return None
     except Exception as e:
         st.error(f"❌ Connection Error: {e}")
@@ -150,7 +145,7 @@ def get_stats():
         return cursor.fetchone()
     except: return 0, 0
 
-# --- 4. Model Loading ---
+# --- 4. Model Loading (Google Drive Support) ---
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, **kwargs):
         kwargs.pop('groups', None)
@@ -159,19 +154,26 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 @st.cache_resource
 def load_model():
     model_name = 'hiragana_model_smart_v1.h5'
-    file_id = '1VP0qVq_J2YhjzEYqLWJro-C8HbuSN0-7' 
+    file_id = '1VP0qVq_J2YhjzEYqLWJro-C8HbuSN0-7'  # ID ที่คุณให้มา
     url = f'https://drive.google.com/uc?id={file_id}'
     
+    # 1. เช็คว่ามีไฟล์ในเครื่องไหม
     if not os.path.exists(model_name):
+        # ลองเช็คในโฟลเดอร์ saved_models เผื่อมี
         local_path = os.path.join('saved_models', model_name)
-        if os.path.exists(local_path): model_name = local_path
+        if os.path.exists(local_path):
+            model_name = local_path
         else:
-            try:
-                gdown.download(url, model_name, quiet=False)
-            except Exception as e:
-                st.error(f"❌ Load Error: {e}")
-                return None
+            # 2. ถ้าไม่มี -> ดาวน์โหลดจาก Google Drive
+            with st.spinner(f"📥 กำลังดาวน์โหลดโมเดลจาก Google Drive... (ID: {file_id})"):
+                try:
+                    gdown.download(url, model_name, quiet=False)
+                    st.success("✅ ดาวน์โหลดโมเดลสำเร็จ!")
+                except Exception as e:
+                    st.error(f"❌ Download Error: {e}")
+                    return None
     
+    # 3. โหลดโมเดลเข้า TensorFlow
     try:
         return tf.keras.models.load_model(
             model_name, 
@@ -179,11 +181,16 @@ def load_model():
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D} 
         )
     except Exception as e:
-        st.error(f"❌ Model Error: {e}")
+        st.error(f"❌ Model Load Error: {e}")
+        # กรณีไฟล์เสีย อาจจะลบแล้วโหลดใหม่
+        if os.path.exists(model_name):
+            os.remove(model_name)
+            st.warning("⚠️ ไฟล์โมเดลอาจเสียหาย ระบบได้ลบไฟล์แล้ว กรุณากด Refresh เพื่อดาวน์โหลดใหม่")
         return None
 
 def load_class_names():
-    return [
+    # ✅ ต้องเรียง A-Z ให้ตรงกับ ImageDataGenerator ของไฟล์ Train
+    raw_names = [
         'a', 'chi', 'e', 'fu', 'ha', 'he', 'hi', 'ho', 'i', 
         'ka', 'ke', 'ki', 'ko', 'ku', 'ma', 'me', 'mi', 'mo', 'mu', 
         'n', 'na', 'ne', 'ni', 'no', 'nu', 'o', 
@@ -192,12 +199,15 @@ def load_class_names():
         'ta', 'te', 'to', 'tsu', 
         'u', 'wa', 'wo', 'ya', 'yo', 'yu'
     ]
+    return sorted(raw_names) # 🔒 บังคับเรียง A-Z
 
 # --- 5. Preprocessing ---
 def import_and_predict(image_data, model):
+    # image_data คือ PIL Image
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
     if image.mode != "L": image = image.convert("L")
     image = image.convert("RGB")
+    
     img_array = np.asarray(image).astype(np.float32)
     img_array = tf.keras.applications.mobilenet_v2.preprocess_input(img_array)
     img_array = np.expand_dims(img_array, axis=0)
@@ -219,7 +229,7 @@ with st.sidebar:
     st.json(TABLE_CONFIG)
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือ (Smart Edition)</div>', unsafe_allow_html=True)
 
 # --- 🔥 รับค่า Parameters ---
 query_params = st.query_params
@@ -232,7 +242,6 @@ is_single_view = False
 mode_color = "#D72638"
 
 if req_quiz_id:
-    # 🟣 โหมดตรวจแบบทดสอบ
     current_id = req_quiz_id
     active_table = "quiz_submissions"
     is_single_view = True
@@ -250,7 +259,6 @@ if req_quiz_id:
     """, unsafe_allow_html=True)
 
 elif req_work_id:
-    # 🔴 โหมดตรวจแบบฝึกหัด
     current_id = req_work_id
     active_table = "progress"
     is_single_view = True
@@ -270,7 +278,6 @@ if is_single_view:
         data_row = get_work_data(current_id, active_table)
         
         if data_row:
-            # Unpack ข้อมูลตามลำดับที่ select มา
             blob_data, saved_result, saved_conf, true_label = data_row
             
             try: image = Image.open(io.BytesIO(blob_data))
@@ -315,7 +322,11 @@ if is_single_view:
                                         preds = import_and_predict(image, model)
                                         idx = np.argmax(preds)
                                         conf = np.max(preds) * 100
-                                        res_code = class_names[idx] if idx < len(class_names) else "Unknown"
+                                        
+                                        if idx < len(class_names):
+                                            res_code = class_names[idx]
+                                        else:
+                                            res_code = "Unknown"
                                         
                                         hiragana_map = {
                                             'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
@@ -337,10 +348,8 @@ if is_single_view:
                                     except Exception as e: st.error(f"Error: {e}")
                             else: st.error("ไม่พบโมเดล")
                 st.markdown('</div>', unsafe_allow_html=True)
-        # กรณีหาไม่เจอ ข้อความจะแสดงใน get_work_data แล้ว
 
 else:
-    # 🟡 Browse Mode (สำหรับ Progress เท่านั้น)
     c1, c2, c3 = st.columns([1, 4, 1])
     with c2:
         filter_option = st.selectbox("โหมด", ["ทั้งหมด (All)", "ยังไม่ตรวจ (Pending)", "ตรวจแล้ว (Analyzed)"], label_visibility="collapsed")
@@ -383,7 +392,12 @@ else:
                                     preds = import_and_predict(image, model)
                                     idx = np.argmax(preds)
                                     conf = np.max(preds) * 100
-                                    res_code = class_names[idx]
+                                    
+                                    if idx < len(class_names):
+                                        res_code = class_names[idx]
+                                    else:
+                                        res_code = "Unknown"
+                                        
                                     final_res = f"{res_code} ({conf:.1f}%)"
                                     update_database(browse_id, "progress", final_res, conf)
                                     st.rerun()
