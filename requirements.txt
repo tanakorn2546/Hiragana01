@@ -4,3 +4,4 @@ numpy
 pillow
 mysql-connector-python
 gdown
+opencv-python-headless
