@@ -6,8 +6,8 @@ import time
 import os
 import mysql.connector
 import io
-import cv2  # ใช้สำหรับแต่งภาพ
-import gdown # ใช้สำหรับโหลดโมเดลจาก Drive
+import cv2
+import gdown
 
 # --- 1. Page Configuration ---
 st.set_page_config(
@@ -28,7 +28,6 @@ def local_css():
             background: linear-gradient(180deg, #d4fcff 0%, #fff 60%, #fff 100%);
             background-attachment: fixed;
         }
-        /* Decorations */
         .glass-card {
             background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(15px);
             border-radius: 20px; border: 2px solid white; padding: 30px;
@@ -44,14 +43,13 @@ def local_css():
             text-align: center; text-shadow: 2px 2px 0px white; margin-bottom: 0;
         }
         .hero-subtitle { text-align: center; color: #555; margin-bottom: 30px; }
-        
         .stButton button { border-radius: 12px !important; font-weight: 600 !important; border: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
 local_css()
 
-# --- 3. Database Configuration & Functions ---
+# --- 3. Database Configuration ---
 TABLE_CONFIG = {
     "progress": {
         "label_col": "char_code",       
@@ -132,42 +130,46 @@ def get_stats():
         return cursor.fetchone()
     except: return 0, 0
 
-# --- 4. Model Loading (From Google Drive) ---
+# --- 4. Model Loading with FIX ---
+
+# 🔧 Class นี้จำเป็นต้องมีเพื่อแก้ปัญหา 'groups' error
+class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
+    def __init__(self, **kwargs):
+        kwargs.pop('groups', None)  # ลบ parameter 'groups' ที่ทำให้เกิด Error ทิ้งไป
+        super().__init__(**kwargs)
+
 @st.cache_resource
 def load_model():
     # ---------------------------------------------------------
-    # ⚠️ TODO: เอา File ID จาก Google Drive ของไฟล์ใหม่มาใส่ตรงนี้
-    # ตัวอย่าง: '1ABC-xyz1234567890abcdefg'
+    # ⚠️ TODO: อย่าลืมใส่ File ID ของคุณตรงนี้
     GOOGLE_DRIVE_FILE_ID = '1IzUW5KSZHAcx5K2VMuNFzDobuf5_gqeM' 
     # ---------------------------------------------------------
     
     model_filename = 'hiragana_mobilenet_v2_optimized.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
-    # เช็คว่ามีไฟล์ในเครื่องหรือยัง ถ้าไม่มีให้โหลด
     if not os.path.exists(model_filename):
-        # ลองเช็คในโฟลเดอร์ saved_models เผื่อมี (สำหรับการรัน Local)
         local_path = os.path.join('saved_models', model_filename)
-        
         if os.path.exists(local_path):
             final_path = local_path
         else:
-            # ถ้าไม่มีเลย ให้โหลดจาก Drive
             try:
-                st.info(f"☁️ กำลังดาวน์โหลดโมเดล... (ID: {GOOGLE_DRIVE_FILE_ID})")
+                st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
                 gdown.download(url, model_filename, quiet=False)
                 final_path = model_filename
-                st.success("✅ ดาวน์โหลดโมเดลสำเร็จ!")
+                st.success("✅ Download Success!")
             except Exception as e:
                 st.error(f"❌ Download Error: {e}")
-                st.warning("กรุณาตรวจสอบ File ID และ Permission ของไฟล์ใน Google Drive")
                 return None
     else:
         final_path = model_filename
 
     try:
-        # โหลดโมเดล
-        return tf.keras.models.load_model(final_path)
+        # ✅ เรียกใช้ custom_objects เพื่อแก้ปัญหา DepthwiseConv2D
+        return tf.keras.models.load_model(
+            final_path, 
+            custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D}
+        )
     except Exception as e:
         st.error(f"❌ Model Load Error: {e}")
         return None
@@ -183,65 +185,41 @@ def load_class_names():
         'u', 'wa', 'wo', 'ya', 'yo', 'yu'
     ]
 
-# --- 5. Preprocessing (ปรับให้ตรงกับ Train.py) ---
+# --- 5. Preprocessing ---
 def enhance_image_for_prediction(img_array):
-    """
-    ฟังก์ชันแต่งภาพ: ทำให้เส้นหนาและชัดขึ้นก่อนส่งให้ AI
-    """
-    # 1. แปลงเป็น Grayscale
     if len(img_array.shape) == 3:
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     else:
         gray = img_array
 
-    # 2. Thresholding: ตัดสีเทาอ่อนทิ้ง
     _, thresh = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
-    
-    # 3. Erosion: ทำให้เส้นหนาขึ้น
     kernel = np.ones((2, 2), np.uint8)
     img_thick = cv2.erode(thresh, kernel, iterations=1)
-
-    # 4. แปลงกลับเป็น RGB
     img_back = cv2.cvtColor(img_thick, cv2.COLOR_GRAY2RGB)
     
-    # 5. Preprocess ของ MobileNetV2
     return tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
 
 def import_and_predict(image_data, model):
-    # ปรับขนาดภาพ
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
-    
-    # แปลงเป็น RGB
-    if image.mode != "RGB":
-        image = image.convert("RGB")
-    
-    # แปลงเป็น Numpy Array
+    if image.mode != "RGB": image = image.convert("RGB")
     img_array = np.array(image)
-    
-    # ✅ เรียกใช้ฟังก์ชันแต่งภาพ
     processed_img = enhance_image_for_prediction(img_array)
-    
-    # เพิ่มมิติ Batch
     img_batch = np.expand_dims(processed_img, axis=0)
-    
     return model.predict(img_batch)
 
 # --- 6. Main Application Logic ---
 model = load_model()
 class_names = load_class_names()
 
-# Sidebar Stats
 with st.sidebar:
     st.markdown("### 🌸 สรุปข้อมูล (Practice)")
     total_w, checked_w = get_stats()
     st.info(f"ภาพทั้งหมด: {total_w}")
     st.success(f"ตรวจแล้ว: {checked_w}")
-    st.caption("v2.1 MobileNet + GDrive")
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Optimized)</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Fixed)</div>', unsafe_allow_html=True)
 
-# --- 🔥 รับค่า Parameters ---
 query_params = st.query_params
 req_work_id = query_params.get("work_id", None)
 req_quiz_id = query_params.get("quiz_id", None)
@@ -252,42 +230,29 @@ is_single_view = False
 mode_color = "#D72638"
 
 if req_quiz_id:
-    # 🟣 โหมดตรวจแบบทดสอบ
     current_id = req_quiz_id
     active_table = "quiz_submissions"
     is_single_view = True
     mode_color = "#7c3aed"
     st.markdown(f"""
-    <div style="background:#f3e8ff; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        📝 กำลังตรวจ: แบบทดสอบ (Quiz Submission ID: {current_id})
+    <div style="background:#f3e8ff; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold;">
+        📝 กำลังตรวจ: แบบทดสอบ (Quiz ID: {current_id})
     </div>
-    <style>
-        .stApp {{ background: linear-gradient(180deg, #f3e8ff 0%, #fff 60%, #fff 100%) !important; }}
-        .big-char {{ color: {mode_color} !important; }}
-        .result-card {{ border-top-color: {mode_color} !important; }}
-        div[data-testid="stVerticalBlock"] .stButton button {{ background: {mode_color} !important; }}
-    </style>
+    <style>.stApp {{ background: linear-gradient(180deg, #f3e8ff 0%, #fff 60%, #fff 100%) !important; }}</style>
     """, unsafe_allow_html=True)
-
 elif req_work_id:
-    # 🔴 โหมดตรวจแบบฝึกหัด
     current_id = req_work_id
     active_table = "progress"
     is_single_view = True
     st.markdown(f"""
-    <div style="background:#ffebee; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+    <div style="background:#ffebee; padding:15px; border-radius:10px; border-left:5px solid {mode_color}; margin-bottom:20px; color:{mode_color}; font-weight:bold;">
         ✍️ กำลังตรวจ: แบบฝึกหัด (Work ID: {current_id})
     </div>
-    <style>
-        div[data-testid="stVerticalBlock"] .stButton button {{ background: {mode_color} !important; }}
-    </style>
     """, unsafe_allow_html=True)
 
-# --- Logic การแสดงผล ---
 if is_single_view:
     if current_id:
         data_row = get_work_data(current_id, active_table)
-        
         if data_row:
             blob_data, saved_result, saved_conf, true_label = data_row
             try: image = Image.open(io.BytesIO(blob_data))
@@ -296,11 +261,9 @@ if is_single_view:
             if image:
                 st.markdown('<div class="glass-card">', unsafe_allow_html=True)
                 col_img, col_res = st.columns([1, 1.2], gap="large")
-                
                 with col_img:
                     st.markdown(f"**โจทย์:** `{true_label}`")
                     st.image(image, use_container_width=True)
-                
                 with col_res:
                     st.markdown("**ผลการตรวจ**")
                     if saved_result:
@@ -308,22 +271,20 @@ if is_single_view:
                         char_part = parts[0]
                         romaji_part = parts[1] if len(parts) > 1 else ''
                         st.markdown(f"""
-                        <div class="result-card">
+                        <div class="result-card" style="border-top-color:{mode_color};">
                             <div style="font-size:1.2rem; color:#555;">{romaji_part}</div>
-                            <div class="big-char">{char_part}</div>
+                            <div class="big-char" style="color:{mode_color};">{char_part}</div>
                             <div style="color:green; font-weight:bold;">{saved_conf:.1f}%</div>
                         </div>""", unsafe_allow_html=True)
-                        
                         st.write("")
-                        if st.button("🔄 ตรวจใหม่", type="secondary", use_container_width=True):
+                        if st.button("🔄 ตรวจใหม่", use_container_width=True):
                             update_database(current_id, active_table, None, 0)
                             st.rerun()
                     else:
                         st.markdown(f"""
                         <div class="result-card" style="border: 2px dashed #ddd; background:#fffaf0;">
-                            <h1 style="color:{mode_color}; opacity:0.5;">⏳</h1><p style="color:#888;">รอผล...</p>
+                            <h1 style="color:{mode_color}; opacity:0.5;">⏳</h1>
                         </div>""", unsafe_allow_html=True)
-                        
                         st.write("")
                         if st.button("✨ วิเคราะห์", type="primary", use_container_width=True):
                             if model:
@@ -333,7 +294,6 @@ if is_single_view:
                                         idx = np.argmax(preds)
                                         conf = np.max(preds) * 100
                                         res_code = class_names[idx] if idx < len(class_names) else "Unknown"
-                                        
                                         hiragana_map = {
                                             'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
                                             'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
@@ -347,72 +307,53 @@ if is_single_view:
                                             'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
                                         }
                                         final_res = hiragana_map.get(res_code, res_code)
-                                        
                                         if update_database(current_id, active_table, final_res, conf):
-                                            time.sleep(0.3)
-                                            st.rerun()
+                                            time.sleep(0.3); st.rerun()
                                     except Exception as e: st.error(f"Error: {e}")
                             else: st.error("ไม่พบโมเดล")
                 st.markdown('</div>', unsafe_allow_html=True)
-
 else:
-    # 🟡 Browse Mode
     c1, c2, c3 = st.columns([1, 4, 1])
-    with c2:
-        filter_option = st.selectbox("โหมด", ["ทั้งหมด (All)", "ยังไม่ตรวจ (Pending)", "ตรวจแล้ว (Analyzed)"], label_visibility="collapsed")
-    
+    with c2: filter_option = st.selectbox("โหมด", ["ทั้งหมด", "ยังไม่ตรวจ", "ตรวจแล้ว"], label_visibility="collapsed")
     work_list = get_work_list(filter_option)
 
     if len(work_list) > 0:
-        id_list = [row[0] for row in work_list]
         if 'current_index' not in st.session_state: st.session_state.current_index = 0
+        if st.session_state.current_index >= len(work_list): st.session_state.current_index = 0
+        elif st.session_state.current_index < 0: st.session_state.current_index = len(work_list) - 1
         
-        if st.session_state.current_index >= len(id_list): st.session_state.current_index = 0
-        elif st.session_state.current_index < 0: st.session_state.current_index = len(id_list) - 1
-
-        browse_id = id_list[st.session_state.current_index]
+        browse_id = work_list[st.session_state.current_index][0]
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.caption(f"ID: {browse_id} | {st.session_state.current_index + 1}/{len(id_list)}")
+        st.caption(f"ID: {browse_id} | {st.session_state.current_index + 1}/{len(work_list)}")
 
         data_row = get_work_data(browse_id, "progress")
         if data_row:
             blob_data, saved_result, saved_conf, true_label = data_row
             try: image = Image.open(io.BytesIO(blob_data))
             except: image = None
-
             if image:
                 col_img, col_res = st.columns([1, 1.2], gap="large")
-                with col_img:
-                    st.markdown(f"**โจทย์:** `{true_label}`")
-                    st.image(image, use_container_width=True)
+                with col_img: st.markdown(f"**โจทย์:** `{true_label}`"); st.image(image, use_container_width=True)
                 with col_res:
-                    st.markdown("**ผลการตรวจ**")
                     if saved_result:
-                        st.success(f"{saved_result}\n\nConfidence: {saved_conf:.1f}%")
-                        if st.button("🔄 ตรวจใหม่", key=f"re_{browse_id}"):
-                            update_database(browse_id, "progress", None, 0)
-                            st.rerun()
+                        st.success(f"{saved_result}\n\nConf: {saved_conf:.1f}%")
+                        if st.button("🔄 ตรวจใหม่"): update_database(browse_id, "progress", None, 0); st.rerun()
                     else:
-                        if st.button("✨ วิเคราะห์", key=f"an_{browse_id}"):
+                        if st.button("✨ วิเคราะห์"):
                             if model:
                                 with st.spinner("AI Thinking..."):
                                     preds = import_and_predict(image, model)
-                                    idx = np.argmax(preds)
-                                    conf = np.max(preds) * 100
+                                    idx = np.argmax(preds); conf = np.max(preds) * 100
                                     res_code = class_names[idx]
                                     final_res = f"{res_code} ({conf:.1f}%)"
                                     update_database(browse_id, "progress", final_res, conf)
                                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-        
         c_prev, c_space, c_next = st.columns([1, 0.2, 1])
-        with c_prev:
-            if st.button("⬅️ ก่อนหน้า", use_container_width=True):
-                st.session_state.current_index -= 1; st.rerun()
-        with c_next:
-            if st.button("ถัดไป ➡️", use_container_width=True):
-                st.session_state.current_index += 1; st.rerun()
+        with c_prev: 
+            if st.button("⬅️ ก่อนหน้า", use_container_width=True): st.session_state.current_index -= 1; st.rerun()
+        with c_next: 
+            if st.button("ถัดไป ➡️", use_container_width=True): st.session_state.current_index += 1; st.rerun()
     else: st.info("ไม่พบข้อมูล")
 
-st.markdown("""<div style="text-align: center; margin-top: 50px; position:relative; z-index:20;">
-<a href="https://www.cedubru.com/hiragana/teacher.php" target="_self" style="color:#D72638; text-decoration:none; font-weight:bold; background:rgba(255,255,255,0.8); padding:5px 15px; border-radius:20px;">🏠 กลับสู่หน้าหลัก</a></div>""", unsafe_allow_html=True)
+st.markdown("""<div style="text-align: center; margin-top: 50px;"><a href="https://www.cedubru.com/hiragana/teacher.php" target="_self" style="color:#D72638; text-decoration:none; font-weight:bold; background:rgba(255,255,255,0.8); padding:5px 15px; border-radius:20px;">🏠 กลับสู่หน้าหลัก</a></div>""", unsafe_allow_html=True)
