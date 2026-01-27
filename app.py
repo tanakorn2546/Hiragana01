@@ -139,14 +139,11 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    # ---------------------------------------------------------
-    # ⚠️ สำคัญ: คุณต้องอัปโหลดไฟล์โมเดลตัวใหม่ (hiragana_mobilenet_v2_final.h5) 
-    # ขึ้น Google Drive แล้วเอา File ID ใหม่มาใส่ตรงนี้
-    # ---------------------------------------------------------
-    GOOGLE_DRIVE_FILE_ID = '1ZB7uQ64PHpVOdx8QuxDtMLRP8If222cQ'  # <-- อย่าลืมเปลี่ยนเป็น ID ของไฟล์ใหม่นะครับ
-    # ---------------------------------------------------------
+    # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ที่เทรนเสร็จแล้วตรงนี้ ⚠️⚠️⚠️
+    GOOGLE_DRIVE_FILE_ID = '1bWeneJhGgkz_9kCoWukjsXgHEt-ZbPIF' 
+    # -------------------------------------------------------------
     
-    model_filename = 'hiragana_mobilenet_v2_final.h5' # เปลี่ยนชื่อไฟล์ให้ตรงกับ script train
+    model_filename = 'hiragana_mobilenet_v2_final.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
     if not os.path.exists(model_filename):
@@ -175,7 +172,6 @@ def load_model():
         return None
 
 def load_class_names():
-    # ✅ แก้ไขลำดับคลาสให้ตรงกับไฟล์ Train ล่าสุด (a, i, u, e, o...)
     return [
         'a', 'i', 'u', 'e', 'o',
         'ka', 'ki', 'ku', 'ke', 'ko',
@@ -191,13 +187,11 @@ def load_class_names():
 
 # --- 5. Preprocessing ---
 def enhance_image_for_prediction(img_array):
-    # ปรับ Logic การแต่งภาพให้ตรงกับตอน Train เพื่อผลลัพธ์ที่ดีที่สุด
     if len(img_array.shape) == 3:
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     else:
         gray = img_array
 
-    # ใช้ Threshold เดียวกับตอน Train (190)
     _, thresh = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
     kernel = np.ones((2, 2), np.uint8)
     img_thick = cv2.erode(thresh, kernel, iterations=1)
@@ -299,20 +293,27 @@ if is_single_view:
                                         preds = import_and_predict(image, model)
                                         idx = np.argmax(preds)
                                         conf = np.max(preds) * 100
-                                        res_code = class_names[idx] if idx < len(class_names) else "Unknown"
-                                        hiragana_map = {
-                                            'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
-                                            'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
-                                            'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
-                                            'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
-                                            'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
-                                            'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
-                                            'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
-                                            'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
-                                            'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                            'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
-                                        }
-                                        final_res = hiragana_map.get(res_code, res_code)
+                                        
+                                        # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
+                                        if conf < 65.0: # ปรับระดับความเข้มงวดตรงนี้
+                                            final_res = "❓ Unknown (เขียนใหม่)"
+                                            res_code = "Unknown"
+                                        else:
+                                            res_code = class_names[idx] if idx < len(class_names) else "Unknown"
+                                            hiragana_map = {
+                                                'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
+                                                'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
+                                                'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
+                                                'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
+                                                'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
+                                                'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
+                                                'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
+                                                'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
+                                                'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
+                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
+                                            }
+                                            final_res = hiragana_map.get(res_code, res_code)
+                                            
                                         if update_database(current_id, active_table, final_res, conf):
                                             time.sleep(0.3); st.rerun()
                                     except Exception as e: st.error(f"Error: {e}")
@@ -350,22 +351,25 @@ else:
                                 with st.spinner("AI Thinking..."):
                                     preds = import_and_predict(image, model)
                                     idx = np.argmax(preds); conf = np.max(preds) * 100
-                                    res_code = class_names[idx]
                                     
-                                    # Mapping ภาษาไทยสำหรับหน้า Browse
-                                    hiragana_map = {
-                                        'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
-                                        'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
-                                        'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
-                                        'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
-                                        'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
-                                        'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
-                                        'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
-                                        'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
-                                        'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                        'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
-                                    }
-                                    final_res = hiragana_map.get(res_code, res_code)
+                                    # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
+                                    if conf < 65.0: # ปรับระดับตรงนี้
+                                        final_res = "❓ Unknown (เขียนใหม่)"
+                                    else:
+                                        res_code = class_names[idx]
+                                        hiragana_map = {
+                                            'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
+                                            'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
+                                            'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
+                                            'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
+                                            'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
+                                            'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
+                                            'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
+                                            'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
+                                            'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
+                                            'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
+                                        }
+                                        final_res = hiragana_map.get(res_code, res_code)
                                     
                                     update_database(browse_id, "progress", final_res, conf)
                                     st.rerun()
