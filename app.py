@@ -163,9 +163,11 @@ def load_model():
         final_path = model_filename
 
     try:
+        # ✅✅✅ แก้ไข: เพิ่ม compile=False เพื่อแก้ปัญหา reduction=auto ✅✅✅
         return tf.keras.models.load_model(
             final_path, 
-            custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D}
+            custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
+            compile=False 
         )
     except Exception as e:
         st.error(f"❌ Model Load Error: {e}")
