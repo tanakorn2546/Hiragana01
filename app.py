@@ -19,8 +19,8 @@ st.set_page_config(
 )
 
 # ⚠️ ใส่ ID ของไฟล์ Model ใน Google Drive ที่นี่
-GOOGLE_DRIVE_FILE_ID = '1h7iSsHpwlaSL03li5dZCljt5VAGiY9SB' # <-- เปลี่ยนเป็น ID ใหม่ของคุณหลังจากอัปโหลดไฟล์ v5
-MODEL_FILENAME = 'hiragana_mobilenet_v2_final_v5.h5'
+GOOGLE_DRIVE_FILE_ID = '1EwhnbuC6zv2M-JRpkZYE5uc6ca5HOcxy' # <-- เปลี่ยนเป็น ID ใหม่ของคุณหลังจากอัปโหลดไฟล์ v5
+MODEL_FILENAME = 'hiragana_mobilenet_v2_final_v6.h5'
 JSON_FILENAME = 'class_indices_final.json'  # ไฟล์นี้ต้องอยู่โฟลเดอร์เดียวกับ app.py
 CONFIDENCE_THRESHOLD = 40.0                 # เกณฑ์ความมั่นใจ
 
