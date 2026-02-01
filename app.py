@@ -27,7 +27,7 @@ GOOGLE_DRIVE_FILE_ID = '1sM-ZFhECDFU-hculh2FKbfQszMpRE2_D'
 MODEL_FILENAME = 'hiragana_mobilenet_v2_final_v6.h5'
 
 # 3. ชื่อไฟล์ JSON (ต้องตรงกับที่เทรนมา)
-JSON_FILENAME = 'class_indices_final.json' 
+JSON_FILENAME = 'class_indices.json' 
 # ---------------------------------------------------------
 
 CONFIDENCE_THRESHOLD = 40.0                 # เกณฑ์ความมั่นใจ
