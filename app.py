@@ -140,10 +140,10 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 @st.cache_resource
 def load_model():
     # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ที่เทรนเสร็จแล้วตรงนี้ ⚠️⚠️⚠️
-    GOOGLE_DRIVE_FILE_ID = '1JJH508CYuWAR6RPmmXGz6goFAH60QOgg' 
+    GOOGLE_DRIVE_FILE_ID = '15qTHZHVBf9y7b3EslsL0EHWettH2Q1zJ' 
     # -------------------------------------------------------------
     
-    model_filename = 'hiragana_mobilenet_v2_final_v2.h5'
+    model_filename = 'hiragana_mobilenet_v2_final_v3.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
     if not os.path.exists(model_filename):
@@ -163,7 +163,7 @@ def load_model():
         final_path = model_filename
 
     try:
-        # ✅ FIX: เพิ่ม compile=False เพื่อแก้ปัญหา reduction=auto
+        # ✅ FIX 1: เพิ่ม compile=False
         return tf.keras.models.load_model(
             final_path, 
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
@@ -174,6 +174,7 @@ def load_model():
         return None
 
 def load_class_names():
+    # ✅ ตรวจสอบลำดับ Class ให้ตรงกับ Folder ที่ใช้เทรน
     return [
         'a', 'i', 'u', 'e', 'o',
         'ka', 'ki', 'ku', 'ke', 'ko',
@@ -187,16 +188,21 @@ def load_class_names():
         'wa', 'wo', 'n'
     ]
 
-# --- 5. Preprocessing ---
+# --- 5. Preprocessing (CORRECTED) ---
 def enhance_image_for_prediction(img_array):
     if len(img_array.shape) == 3:
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     else:
         gray = img_array
 
-    _, thresh = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
+    # ✅ FIX 2: เปลี่ยนเป็น THRESH_BINARY_INV เพื่อกลับสี (ดำ->ขาว, ขาว->ดำ)
+    # เพราะ AI มักจะจำตัวหนังสือที่เป็นสีขาว บนพื้นหลังดำ
+    _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+    
+    # Optional: ทำให้เส้นหนาขึ้นเล็กน้อย (ถ้าจำเป็น)
     kernel = np.ones((2, 2), np.uint8)
-    img_thick = cv2.erode(thresh, kernel, iterations=1)
+    img_thick = cv2.dilate(thresh, kernel, iterations=1) # ใช้ dilate กับตัวหนังสือสีขาวเพื่อเพิ่มความหนา
+    
     img_back = cv2.cvtColor(img_thick, cv2.COLOR_GRAY2RGB)
     
     return tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
@@ -296,8 +302,8 @@ if is_single_view:
                                         idx = np.argmax(preds)
                                         conf = np.max(preds) * 100
                                         
-                                        # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
-                                        if conf < 50.0: # ปรับระดับความเข้มงวดตรงนี้
+                                        # 🔥 Unknown Logic 🔥
+                                        if conf < 50.0: # ปรับระดับความเข้มงวด
                                             final_res = "❓ Unknown (เขียนใหม่)"
                                             res_code = "Unknown"
                                         else:
@@ -354,8 +360,8 @@ else:
                                     preds = import_and_predict(image, model)
                                     idx = np.argmax(preds); conf = np.max(preds) * 100
                                     
-                                    # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
-                                    if conf < 65.0: # ปรับระดับตรงนี้
+                                    # 🔥 Unknown Logic 🔥
+                                    if conf < 65.0: 
                                         final_res = "❓ Unknown (เขียนใหม่)"
                                     else:
                                         res_code = class_names[idx]
