@@ -130,7 +130,7 @@ def get_stats():
         return cursor.fetchone()
     except: return 0, 0
 
-# --- 4. Model Loading with FIX ---
+# --- 4. Model Loading ---
 
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, **kwargs):
@@ -139,11 +139,11 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ที่เทรนเสร็จแล้วตรงนี้ ⚠️⚠️⚠️
-    GOOGLE_DRIVE_FILE_ID = '15qTHZHVBf9y7b3EslsL0EHWettH2Q1zJ' 
+    # ⚠️ ตรวจสอบ ID ไฟล์ Google Drive ให้ตรงกับไฟล์ที่เทรนใหม่
+    GOOGLE_DRIVE_FILE_ID = '1r_Pt54NPJy-z5ZXSKxIV19nJcWDmMcJS' 
     # -------------------------------------------------------------
     
-    model_filename = 'hiragana_mobilenet_v2_final_v3.h5'
+    model_filename = 'hiragana_mobilenet_v2_final_v4.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
     if not os.path.exists(model_filename):
@@ -163,7 +163,6 @@ def load_model():
         final_path = model_filename
 
     try:
-        # ✅ FIX 1: เพิ่ม compile=False
         return tf.keras.models.load_model(
             final_path, 
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
@@ -174,7 +173,6 @@ def load_model():
         return None
 
 def load_class_names():
-    # ✅ ตรวจสอบลำดับ Class ให้ตรงกับ Folder ที่ใช้เทรน
     return [
         'a', 'i', 'u', 'e', 'o',
         'ka', 'ki', 'ku', 'ke', 'ko',
@@ -188,31 +186,41 @@ def load_class_names():
         'wa', 'wo', 'n'
     ]
 
-# --- 5. Preprocessing (CORRECTED) ---
+# --- 5. Preprocessing (Synced with Train.py) ---
 def enhance_image_for_prediction(img_array):
+    """
+    ฟังก์ชันนี้ต้องเหมือนกับ smart_preprocess ใน train.py เป๊ะๆ
+    """
     if len(img_array.shape) == 3:
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     else:
         gray = img_array
 
-    # ✅ FIX 2: เปลี่ยนเป็น THRESH_BINARY_INV เพื่อกลับสี (ดำ->ขาว, ขาว->ดำ)
-    # เพราะ AI มักจะจำตัวหนังสือที่เป็นสีขาว บนพื้นหลังดำ
-    _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY_INV)
+    # 1. Adaptive Thresholding (สู้แสงเงา)
+    # ใช้ ADAPTIVE_THRESH_GAUSSIAN_C + THRESH_BINARY_INV
+    # ผลลัพธ์: พื้นหลังดำ ตัวหนังสือขาว (High Contrast)
+    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                   cv2.THRESH_BINARY_INV, 19, 5)
     
-    # Optional: ทำให้เส้นหนาขึ้นเล็กน้อย (ถ้าจำเป็น)
-    kernel = np.ones((2, 2), np.uint8)
-    img_thick = cv2.dilate(thresh, kernel, iterations=1) # ใช้ dilate กับตัวหนังสือสีขาวเพื่อเพิ่มความหนา
+    # 2. Dilation (ถมเส้นให้หนาชัดเจน)
+    kernel = np.ones((3, 3), np.uint8)
+    dilated = cv2.dilate(thresh, kernel, iterations=1)
     
-    img_back = cv2.cvtColor(img_thick, cv2.COLOR_GRAY2RGB)
+    # 3. แปลงเป็น RGB (พื้นดำ เส้นขาว)
+    img_back = cv2.cvtColor(dilated, cv2.COLOR_GRAY2RGB)
     
     return tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
 
 def import_and_predict(image_data, model):
+    # ปรับขนาดภาพก่อน
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
     if image.mode != "RGB": image = image.convert("RGB")
     img_array = np.array(image)
+    
+    # ส่งเข้า Preprocess
     processed_img = enhance_image_for_prediction(img_array)
     img_batch = np.expand_dims(processed_img, axis=0)
+    
     return model.predict(img_batch)
 
 # --- 6. Main Application Logic ---
@@ -303,7 +311,8 @@ if is_single_view:
                                         conf = np.max(preds) * 100
                                         
                                         # 🔥 Unknown Logic 🔥
-                                        if conf < 50.0: # ปรับระดับความเข้มงวด
+                                        # ปรับเกณฑ์ความมั่นใจให้สูงขึ้นเพราะโมเดลเราเก่งขึ้นแล้ว
+                                        if conf < 60.0: 
                                             final_res = "❓ Unknown (เขียนใหม่)"
                                             res_code = "Unknown"
                                         else:
