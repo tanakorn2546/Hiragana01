@@ -140,10 +140,10 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 @st.cache_resource
 def load_model():
     # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ที่เทรนเสร็จแล้วตรงนี้ ⚠️⚠️⚠️
-    GOOGLE_DRIVE_FILE_ID = '1bWeneJhGgkz_9kCoWukjsXgHEt-ZbPIF' 
+    GOOGLE_DRIVE_FILE_ID = '1JJH508CYuWAR6RPmmXGz6goFAH60QOgg' 
     # -------------------------------------------------------------
     
-    model_filename = 'hiragana_mobilenet_v2_final.h5'
+    model_filename = 'hiragana_mobilenet_v2_final_v2.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
     if not os.path.exists(model_filename):
