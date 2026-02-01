@@ -312,7 +312,7 @@ if is_single_view:
                                         
                                         # 🔥 Unknown Logic 🔥
                                         # ปรับเกณฑ์ความมั่นใจให้สูงขึ้นเพราะโมเดลเราเก่งขึ้นแล้ว
-                                        if conf < 60.0: 
+                                        if conf < 50.0: 
                                             final_res = "❓ Unknown (เขียนใหม่)"
                                             res_code = "Unknown"
                                         else:
