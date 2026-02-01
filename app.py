@@ -22,7 +22,7 @@ st.set_page_config(
 GOOGLE_DRIVE_FILE_ID = '1h7iSsHpwlaSL03li5dZCljt5VAGiY9SB' # <-- เปลี่ยนเป็น ID ใหม่ของคุณหลังจากอัปโหลดไฟล์ v5
 MODEL_FILENAME = 'hiragana_mobilenet_v2_final_v5.h5'
 JSON_FILENAME = 'class_indices_final.json'  # ไฟล์นี้ต้องอยู่โฟลเดอร์เดียวกับ app.py
-CONFIDENCE_THRESHOLD = 60.0                 # เกณฑ์ความมั่นใจ
+CONFIDENCE_THRESHOLD = 40.0                 # เกณฑ์ความมั่นใจ
 
 # --- 2. CSS Styling ---
 def local_css():
