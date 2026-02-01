@@ -18,11 +18,33 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ⚠️ ใส่ ID ของไฟล์ Model ใน Google Drive ที่นี่
-GOOGLE_DRIVE_FILE_ID = '1EwhnbuC6zv2M-JRpkZYE5uc6ca5HOcxy' # <-- เปลี่ยนเป็น ID ใหม่ของคุณหลังจากอัปโหลดไฟล์ v5
+# ---------------------------------------------------------
+# ⚠️⚠️⚠️ จุดสำคัญที่ต้องแก้ไข ⚠️⚠️⚠️
+# 1. เอา ID ของไฟล์ .h5 ตัวใหม่ (v6) จาก Google Drive มาใส่ตรงนี้
+GOOGLE_DRIVE_FILE_ID = '1sM-ZFhECDFU-hculh2FKbfQszMpRE2_D' 
+
+# 2. ชื่อไฟล์โมเดล (เปลี่ยนเป็น v6 เพื่อให้ระบบรู้ว่าเป็นตัวใหม่)
 MODEL_FILENAME = 'hiragana_mobilenet_v2_final_v6.h5'
-JSON_FILENAME = 'class_indices_final.json'  # ไฟล์นี้ต้องอยู่โฟลเดอร์เดียวกับ app.py
+
+# 3. ชื่อไฟล์ JSON (ต้องตรงกับที่เทรนมา)
+JSON_FILENAME = 'class_indices_final.json' 
+# ---------------------------------------------------------
+
 CONFIDENCE_THRESHOLD = 40.0                 # เกณฑ์ความมั่นใจ
+
+# --- เพิ่มเมนู Sidebar สำหรับล้างค่า (แก้ปัญหาโมเดลค้าง) ---
+with st.sidebar:
+    st.header("🔧 เครื่องมือแก้ปัญหา")
+    if st.button("🗑️ ล้าง Cache โมเดล (Force Reset)"):
+        st.cache_resource.clear()
+        if os.path.exists(MODEL_FILENAME):
+            try:
+                os.remove(MODEL_FILENAME) # ลบไฟล์ทิ้งเพื่อโหลดใหม่
+            except:
+                pass
+        st.success("✅ ล้าง Cache แล้ว! กรุณากด Rerun หรือรีเฟรชหน้าเว็บ")
+        time.sleep(1)
+        st.rerun()
 
 # --- 2. CSS Styling ---
 def local_css():
@@ -72,14 +94,13 @@ def update_database(target_id, table_name, result, confidence):
         col_res = "ai_result"
         col_conf = "ai_confidence"
         
-        # ปรับชื่อคอลัมน์ตามตาราง
-        if table_name == "quiz_submissions":
-            pass # ใช้ชื่อ default ด้านบน
-        else:
-            pass # ใช้ชื่อ default ด้านบน (ตรวจสอบชื่อ column ใน DB อีกครั้งถ้า error)
-
         sql = f"UPDATE {table_name} SET {col_res} = %s, {col_conf} = %s WHERE id = %s"
-        cursor.execute(sql, (result, float(confidence), target_id))
+        # กรณีล้างค่า (Re-check) ให้ส่ง NULL หรือค่าว่างไป
+        if result is None:
+            cursor.execute(sql, (None, 0, target_id))
+        else:
+            cursor.execute(sql, (result, float(confidence), target_id))
+            
         conn.commit()
         conn.close()
         return True
@@ -117,9 +138,10 @@ def load_ai_model():
     # 1. Download from Google Drive if needed
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
-    if not os.path.exists(MODEL_FILENAME):
+    # ถ้ายังไม่มีไฟล์ หรือไฟล์มีขนาด 0 (เสีย) ให้โหลดใหม่
+    if not os.path.exists(MODEL_FILENAME) or os.path.getsize(MODEL_FILENAME) == 0:
         try:
-            with st.spinner(f"☁️ Downloading Model from Drive... (v5)"):
+            with st.spinner(f"☁️ Downloading Model... ({MODEL_FILENAME})"):
                 gdown.download(url, MODEL_FILENAME, quiet=False)
                 st.success("✅ Download Success!")
         except Exception as e:
@@ -135,52 +157,47 @@ def load_ai_model():
         )
     except Exception as e:
         st.error(f"❌ Model Load Error: {e}")
+        # ถ้าโหลดไม่ได้ ให้ลองลบไฟล์แล้วโหลดใหม่ (เผื่อไฟล์เสีย)
+        if os.path.exists(MODEL_FILENAME):
+            os.remove(MODEL_FILENAME)
         return None
 
 @st.cache_data
 def load_class_mapping():
-    # 🔥 อ่าน Mapping จาก JSON ที่สร้างจาก train.py
-    # สิ่งนี้จะแก้ปัญหา "ทายผิดตัว" หรือ "สลับ class" ได้ 100%
     if not os.path.exists(JSON_FILENAME):
-        st.warning(f"⚠️ ไม่พบไฟล์ {JSON_FILENAME} ระบบจะใช้ Default Mapping (อาจไม่แม่นยำ)")
+        st.warning(f"⚠️ ไม่พบไฟล์ {JSON_FILENAME} ระบบจะใช้ Default Mapping")
         return None
     
     try:
         with open(JSON_FILENAME, 'r') as f:
             class_indices = json.load(f)
-        # กลับด้าน Key-Value: {'a': 0} -> {0: 'a'}
         return {v: k for k, v in class_indices.items()}
     except Exception as e:
         st.error(f"❌ JSON Load Error: {e}")
         return None
 
 def preprocess_image(image_data):
-    """
-    ฟังก์ชันนี้ต้องเหมือนกับ smart_preprocess ใน train.py เป๊ะๆ
-    """
     # 1. Resize & Grayscale
     img = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
     if img.mode != "L":
         img = img.convert("L")
     img_array = np.array(img)
 
-    # 2. Adaptive Thresholding (แก้ปัญหาแสงเงา)
-    # ใช้ THRESH_BINARY_INV เพื่อให้ Background=ดำ, Text=ขาว
+    # 2. Adaptive Thresholding
     thresh = cv2.adaptiveThreshold(img_array, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
                                    cv2.THRESH_BINARY_INV, 19, 5)
     
-    # 3. Dilation (ถมเส้นให้หนาชัดเจน)
+    # 3. Dilation
     kernel = np.ones((3, 3), np.uint8)
     dilated = cv2.dilate(thresh, kernel, iterations=1)
     
-    # 4. Convert to RGB & Preprocess for MobileNet
+    # 4. Convert to RGB & Preprocess
     img_back = cv2.cvtColor(dilated, cv2.COLOR_GRAY2RGB)
     img_preprocessed = tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
     
     return np.expand_dims(img_preprocessed, axis=0)
 
 def get_display_text(class_name):
-    """ แปลงรหัสภาษาอังกฤษเป็น ฮิรางานะ """
     mapping = {
         'a': 'あ (a)', 'i': 'い (i)', 'u': 'う (u)', 'e': 'え (e)', 'o': 'お (o)',
         'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
@@ -200,7 +217,7 @@ model = load_ai_model()
 idx_to_label = load_class_mapping()
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Final)</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="hero-subtitle">Model Version: {MODEL_FILENAME}</div>', unsafe_allow_html=True)
 
 query_params = st.query_params
 req_work_id = query_params.get("work_id", None)
@@ -239,8 +256,9 @@ if target_id:
             
             with col_res:
                 st.markdown("**ผลการตรวจ**")
-                if saved_result:
-                    # กรณีตรวจไปแล้ว
+                
+                # Check Logic: ถ้ามีค่า saved_result แสดงว่าตรวจแล้ว ให้โชว์ของเดิม
+                if saved_result and saved_result != "None": 
                     parts = saved_result.split(' ')
                     char_part = parts[0]
                     romaji_part = parts[1] if len(parts) > 1 else ''
@@ -253,11 +271,13 @@ if target_id:
                     </div>""", unsafe_allow_html=True)
                     st.write("")
                     
-                    if st.button("🔄 ตรวจใหม่", use_container_width=True):
-                        update_database(target_id, active_table, None, 0)
-                        st.rerun()
+                    # ปุ่มตรวจใหม่: สำคัญมาก! ต้องกดปุ่มนี้ถึงจะล้างค่าเก่าแล้วตรวจด้วยโมเดลใหม่
+                    if st.button("🔄 ตรวจใหม่ (Re-Check)", use_container_width=True):
+                        update_database(target_id, active_table, None, 0) # ล้างค่าใน DB เป็น NULL
+                        st.cache_data.clear() # เคลียร์ cache ข้อมูล
+                        st.rerun() # รีโหลดหน้าเว็บ
                 else:
-                    # กรณีรอยังไม่ตรวจ
+                    # กรณีรอยังไม่ตรวจ หรือกด Re-Check มาแล้ว
                     st.markdown(f"""
                     <div class="result-card" style="border: 2px dashed #ddd; background:#fffaf0;">
                         <h1 style="color:{mode_color}; opacity:0.5;">⏳</h1>
