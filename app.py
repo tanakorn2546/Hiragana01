@@ -7,7 +7,6 @@ import os
 import mysql.connector
 import io
 import cv2
-import gdown
 
 # --- 1. Page Configuration ---
 st.set_page_config(
@@ -130,7 +129,7 @@ def get_stats():
         return cursor.fetchone()
     except: return 0, 0
 
-# --- 4. Model Loading with FIX ---
+# --- 4. Model Loading (Direct File Load) ---
 
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, **kwargs):
@@ -139,34 +138,23 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    # ⚠️⚠️⚠️ [สำคัญ] เปลี่ยน ID นี้เป็น ID ของไฟล์โมเดลตัวใหม่ที่คุณอัปโหลดขึ้น Google Drive ⚠️⚠️⚠️
-    GOOGLE_DRIVE_FILE_ID = '1ifolv8vIlH7zIP7ba2T_S_eapkhaFWgg' 
-    # -------------------------------------------------------------
-    
-    # เปลี่ยนชื่อไฟล์ให้ตรงกับที่เทรนมา (Hiragana 46 classes)
+    # ✅ ใช้ชื่อไฟล์ตรงๆ ไม่ต้องโหลดจาก Google Drive แล้ว
+    # ต้องมั่นใจว่าไฟล์ .h5 อยู่ใน GitHub โฟลเดอร์เดียวกับ app.py
     model_filename = 'hiragana_mobilenet_v2_final_v7.h5'
-    url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
+    # เช็คว่าไฟล์มีอยู่จริงไหม (เผื่อลืมอัปโหลด)
     if not os.path.exists(model_filename):
-        local_path = os.path.join('saved_models', model_filename)
-        if os.path.exists(local_path):
-            final_path = local_path
+        # ลองเช็คในโฟลเดอร์ saved_models เผื่อไว้
+        if os.path.exists(os.path.join('saved_models', model_filename)):
+             model_filename = os.path.join('saved_models', model_filename)
         else:
-            try:
-                st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
-                gdown.download(url, model_filename, quiet=False)
-                final_path = model_filename
-                st.success("✅ Download Success!")
-            except Exception as e:
-                st.error(f"❌ Download Error: {e}")
-                return None
-    else:
-        final_path = model_filename
+            st.error(f"❌ ไม่พบไฟล์โมเดล: {model_filename}")
+            st.warning("⚠️ กรุณาอัปโหลดไฟล์ .h5 ขึ้น GitHub ไว้ในโฟลเดอร์เดียวกับ app.py")
+            return None
 
     try:
-        # ใช้ compile=False เพื่อแก้ปัญหา reduction=auto ใน TF ต่างเวอร์ชัน
         return tf.keras.models.load_model(
-            final_path, 
+            model_filename, 
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
             compile=False 
         )
@@ -175,7 +163,7 @@ def load_model():
         return None
 
 def load_class_names():
-    # ✅✅✅ แก้ไข: เรียงตาม Gojūon Order (46 ตัว) และใช้ 'nn' ตามที่โมเดลใหม่เทรนมา ✅✅✅
+    # ✅ เรียงตาม Gojūon Order (46 ตัว) และใช้ 'nn'
     return [
         'a', 'i', 'u', 'e', 'o',
         'ka', 'ki', 'ku', 'ke', 'ko',
@@ -314,7 +302,7 @@ if is_single_view:
                                                 'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                                 'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                                 'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                                # ✅ แก้ไข Mapping สำหรับ 'nn' ให้แสดงผลเป็น 'ん (n)'
+                                                # ✅ Mapping สำหรับ 'nn'
                                                 'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (n)' 
                                             }
                                             final_res = hiragana_map.get(res_code, res_code)
@@ -372,7 +360,6 @@ else:
                                             'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                             'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                             'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                            # ✅ แก้ไข Mapping สำหรับ 'nn' ให้แสดงผลเป็น 'ん (n)'
                                             'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (n)'
                                         }
                                         final_res = hiragana_map.get(res_code, res_code)
