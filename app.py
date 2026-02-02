@@ -66,8 +66,7 @@ TABLE_CONFIG = {
 }
 
 def init_connection():
-    # ข้อควรระวัง: การใส่รหัสผ่านใน Code โดยตรงไม่ปลอดภัยสำหรับการใช้งานจริง
-    # แนะนำให้ใช้ st.secrets ในอนาคต
+    # หมายเหตุ: ในระยะยาวควรย้ายรหัสผ่านไปไว้ใน st.secrets
     return mysql.connector.connect(
         host="www.cedubru.com",
         user="cedubruc_hiragana_app",
@@ -132,7 +131,7 @@ def get_stats():
         return cursor.fetchone()
     except: return 0, 0
 
-# --- 4. Model Loading (Robust Version) ---
+# --- 4. Model Loading (Robust Version - แก้ไขแล้ว) ---
 
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, **kwargs):
@@ -156,26 +155,29 @@ def load_model():
             compile=False 
         )
 
-    # 1. ถ้ามีไฟล์อยู่แล้ว ลองโหลดดู
+    # 1. ตรวจสอบไฟล์ในเครื่องก่อน (Local Cache)
     if os.path.exists(model_filename):
         try:
-            st.info("📂 Found local model. Loading...")
+            st.info("📂 พบโมเดลในเครื่อง (Local Model). กำลังโหลด...")
             return _internal_load(model_filename)
         except Exception as e:
-            st.warning(f"⚠️ Local file corrupt, deleting and re-downloading... ({e})")
-            os.remove(model_filename) # ลบไฟล์เสียทิ้ง
+            st.warning(f"⚠️ ไฟล์โมเดลเสียหาย ({e}) ระบบจะลบและดาวน์โหลดใหม่...")
+            try:
+                os.remove(model_filename) # ลบไฟล์ที่เสียทิ้ง
+            except:
+                pass
 
-    # 2. ดาวน์โหลดใหม่ (กรณีไม่มีไฟล์ หรือไฟล์เสียถูกลบไปแล้ว)
+    # 2. ดาวน์โหลดใหม่จาก Google Drive
     try:
-        st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
-        # fuzzy=True สำคัญมาก ช่วยแก้ปัญหา Google Drive Virus Warning
+        st.info(f"☁️ กำลังดาวน์โหลดโมเดล... (ID: {GOOGLE_DRIVE_FILE_ID})")
+        # fuzzy=True ช่วยข้ามหน้า Virus Scan Warning
         output = gdown.download(url, model_filename, quiet=False, fuzzy=True)
         
-        if output:
-            st.success("✅ Download Success!")
+        if output and os.path.exists(model_filename):
+            st.success("✅ ดาวน์โหลดสำเร็จ! กำลังโหลดเข้าสู่ระบบ...")
             return _internal_load(model_filename)
         else:
-            st.error("❌ Download failed (gdown returned None).")
+            st.error("❌ ดาวน์โหลดไม่สำเร็จ (gdown returned None).")
             return None
             
     except Exception as e:
