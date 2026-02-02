@@ -184,7 +184,7 @@ def load_class_names():
         'ma', 'mi', 'mu', 'me', 'mo',
         'ya', 'yu', 'yo',
         'ra', 'ri', 'ru', 're', 'ro',
-        'wa', 'wo', 'n'
+        'wa', 'wo', 'nn'
     ]
 
 # --- 5. Preprocessing ---
@@ -312,7 +312,7 @@ if is_single_view:
                                                 'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                                 'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                                 'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 'n': 'ん (n)'
+                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (n)'
                                             }
                                             final_res = hiragana_map.get(res_code, res_code)
                                             
