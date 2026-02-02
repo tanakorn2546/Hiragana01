@@ -141,7 +141,7 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 @st.cache_resource
 def load_model():
     # --- ID ไฟล์โมเดล ---
-    GOOGLE_DRIVE_FILE_ID = '1ifolv8vIlH7zIP7ba2T_S_eapkhaFWgg'
+    GOOGLE_DRIVE_FILE_ID = '13TA41KsObmUe7askhJVun-8Lcs-L1Qxh'
     # -------------------
     
     model_filename = 'hiragana_mobilenet_v2_final_v7.h5'
