@@ -66,6 +66,8 @@ TABLE_CONFIG = {
 }
 
 def init_connection():
+    # ข้อควรระวัง: การใส่รหัสผ่านใน Code โดยตรงไม่ปลอดภัยสำหรับการใช้งานจริง
+    # แนะนำให้ใช้ st.secrets ในอนาคต
     return mysql.connector.connect(
         host="www.cedubru.com",
         user="cedubruc_hiragana_app",
@@ -130,7 +132,7 @@ def get_stats():
         return cursor.fetchone()
     except: return 0, 0
 
-# --- 4. Model Loading with FIX ---
+# --- 4. Model Loading (Robust Version) ---
 
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, **kwargs):
@@ -139,38 +141,45 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ที่เทรนเสร็จแล้วตรงนี้ ⚠️⚠️⚠️
-    GOOGLE_DRIVE_FILE_ID = '1ifolv8vIlH7zIP7ba2T_S_eapkhaFWgg' 
-    # -------------------------------------------------------------
+    # --- ID ไฟล์โมเดล ---
+    GOOGLE_DRIVE_FILE_ID = '1ifolv8vIlH7zIP7ba2T_S_eapkhaFWgg'
+    # -------------------
     
     model_filename = 'hiragana_mobilenet_v2_final_v7.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
-    if not os.path.exists(model_filename):
-        local_path = os.path.join('saved_models', model_filename)
-        if os.path.exists(local_path):
-            final_path = local_path
-        else:
-            try:
-                st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
-                gdown.download(url, model_filename, quiet=False)
-                final_path = model_filename
-                st.success("✅ Download Success!")
-            except Exception as e:
-                st.error(f"❌ Download Error: {e}")
-                return None
-    else:
-        final_path = model_filename
-
-    try:
-        # ✅✅✅ แก้ไข: เพิ่ม compile=False เพื่อแก้ปัญหา reduction=auto ✅✅✅
+    # ฟังก์ชันย่อยสำหรับโหลด Keras Model
+    def _internal_load(path):
         return tf.keras.models.load_model(
-            final_path, 
+            path, 
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
             compile=False 
         )
+
+    # 1. ถ้ามีไฟล์อยู่แล้ว ลองโหลดดู
+    if os.path.exists(model_filename):
+        try:
+            st.info("📂 Found local model. Loading...")
+            return _internal_load(model_filename)
+        except Exception as e:
+            st.warning(f"⚠️ Local file corrupt, deleting and re-downloading... ({e})")
+            os.remove(model_filename) # ลบไฟล์เสียทิ้ง
+
+    # 2. ดาวน์โหลดใหม่ (กรณีไม่มีไฟล์ หรือไฟล์เสียถูกลบไปแล้ว)
+    try:
+        st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
+        # fuzzy=True สำคัญมาก ช่วยแก้ปัญหา Google Drive Virus Warning
+        output = gdown.download(url, model_filename, quiet=False, fuzzy=True)
+        
+        if output:
+            st.success("✅ Download Success!")
+            return _internal_load(model_filename)
+        else:
+            st.error("❌ Download failed (gdown returned None).")
+            return None
+            
     except Exception as e:
-        st.error(f"❌ Model Load Error: {e}")
+        st.error(f"❌ Critical Model Load Error: {e}")
         return None
 
 def load_class_names():
@@ -296,8 +305,7 @@ if is_single_view:
                                         idx = np.argmax(preds)
                                         conf = np.max(preds) * 100
                                         
-                                        # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
-                                        if conf < 50.0: # ปรับระดับความเข้มงวดตรงนี้
+                                        if conf < 50.0:
                                             final_res = "❓ Unknown (เขียนใหม่)"
                                             res_code = "Unknown"
                                         else:
@@ -312,7 +320,7 @@ if is_single_view:
                                                 'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                                 'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                                 'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (nn)'
+                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (n)'
                                             }
                                             final_res = hiragana_map.get(res_code, res_code)
                                             
@@ -354,8 +362,7 @@ else:
                                     preds = import_and_predict(image, model)
                                     idx = np.argmax(preds); conf = np.max(preds) * 100
                                     
-                                    # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
-                                    if conf < 65.0: # ปรับระดับตรงนี้
+                                    if conf < 65.0:
                                         final_res = "❓ Unknown (เขียนใหม่)"
                                     else:
                                         res_code = class_names[idx]
@@ -369,7 +376,7 @@ else:
                                             'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                             'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                             'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                            'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (nn)'
+                                            'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (n)'
                                         }
                                         final_res = hiragana_map.get(res_code, res_code)
                                     
