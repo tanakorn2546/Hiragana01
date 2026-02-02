@@ -139,11 +139,10 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    # ⚠️⚠️⚠️ [สำคัญ] เปลี่ยน ID นี้เป็น ID ของไฟล์โมเดลตัวใหม่ที่คุณอัปโหลดขึ้น Google Drive ⚠️⚠️⚠️
-    GOOGLE_DRIVE_FILE_ID = '1ifolv8vIlH7zIP7ba2T_S_eapkhaFWgg' 
+    # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ที่เทรนเสร็จแล้วตรงนี้ ⚠️⚠️⚠️
+    GOOGLE_DRIVE_FILE_ID = '1ifolv8vIlH7zIP7ba2T_S_eapkhaFWgg'
     # -------------------------------------------------------------
     
-    # เปลี่ยนชื่อไฟล์ให้ตรงกับที่เทรนมา (Hiragana 46 classes)
     model_filename = 'hiragana_mobilenet_v2_final_v7.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
@@ -164,7 +163,7 @@ def load_model():
         final_path = model_filename
 
     try:
-        # ใช้ compile=False เพื่อแก้ปัญหา reduction=auto ใน TF ต่างเวอร์ชัน
+        # ✅✅✅ แก้ไข: เพิ่ม compile=False เพื่อแก้ปัญหา reduction=auto ✅✅✅
         return tf.keras.models.load_model(
             final_path, 
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
@@ -175,7 +174,6 @@ def load_model():
         return None
 
 def load_class_names():
-    # ✅✅✅ แก้ไข: เรียงตาม Gojūon Order (46 ตัว) และใช้ 'nn' ตามที่โมเดลใหม่เทรนมา ✅✅✅
     return [
         'a', 'i', 'u', 'e', 'o',
         'ka', 'ki', 'ku', 'ke', 'ko',
@@ -186,7 +184,7 @@ def load_class_names():
         'ma', 'mi', 'mu', 'me', 'mo',
         'ya', 'yu', 'yo',
         'ra', 'ri', 'ru', 're', 'ro',
-        'wa', 'wo', 'nn' 
+        'wa', 'wo', 'nn'
     ]
 
 # --- 5. Preprocessing ---
@@ -314,8 +312,7 @@ if is_single_view:
                                                 'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                                 'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                                 'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                                # ✅ แก้ไข Mapping สำหรับ 'nn' ให้แสดงผลเป็น 'ん (n)'
-                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (n)' 
+                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (n)'
                                             }
                                             final_res = hiragana_map.get(res_code, res_code)
                                             
@@ -372,7 +369,6 @@ else:
                                             'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                             'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                             'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                            # ✅ แก้ไข Mapping สำหรับ 'nn' ให้แสดงผลเป็น 'ん (n)'
                                             'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (n)'
                                         }
                                         final_res = hiragana_map.get(res_code, res_code)
