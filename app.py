@@ -140,10 +140,10 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 @st.cache_resource
 def load_model():
     # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ที่เทรนเสร็จแล้วตรงนี้ ⚠️⚠️⚠️
-    GOOGLE_DRIVE_FILE_ID = '1XIXcL4rThioVtIr8Mf3_XHr8qd4rNdpL' 
+    GOOGLE_DRIVE_FILE_ID = '1MVPo67mbrt4w45deeol8IAUcRSXVr8SE' 
     # -------------------------------------------------------------
     
-    model_filename = 'hiragana_mobilenet_v2_best.h5'
+    model_filename = 'hiragana_mobilenet_v2_enhancedv2.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
     if not os.path.exists(model_filename):
@@ -297,7 +297,7 @@ if is_single_view:
                                         conf = np.max(preds) * 100
                                         
                                         # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
-                                        if conf < 50.0: # ปรับระดับความเข้มงวดตรงนี้
+                                        if conf < 60.0: # ปรับระดับความเข้มงวดตรงนี้
                                             final_res = "❓ Unknown (เขียนใหม่)"
                                             res_code = "Unknown"
                                         else:
@@ -312,7 +312,7 @@ if is_single_view:
                                                 'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                                 'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                                 'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (n)'
+                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (nn)'
                                             }
                                             final_res = hiragana_map.get(res_code, res_code)
                                             
@@ -369,7 +369,7 @@ else:
                                             'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                             'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                             'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                            'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (n)'
+                                            'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (nn)'
                                         }
                                         final_res = hiragana_map.get(res_code, res_code)
                                     
