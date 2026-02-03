@@ -139,11 +139,12 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ที่เทรนเสร็จแล้วตรงนี้ ⚠️⚠️⚠️
-    GOOGLE_DRIVE_FILE_ID = '16yx96FcTY7YUXObHiwBGnG08wjMCjTl2' 
+    # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่บน Google Drive ตรงนี้ ⚠️⚠️⚠️
+    GOOGLE_DRIVE_FILE_ID = '1OxXLdo4nrlOyRbjnQC_DbKeZN3BVgeco' 
     # -------------------------------------------------------------
     
-    model_filename = 'hiragana_mobilenet_v2_enhanced.h5'
+    # ✅ เปลี่ยนชื่อไฟล์ให้ตรงกับ script เทรนล่าสุด
+    model_filename = 'hiragana_mobilenet_v2_final_best.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
     if not os.path.exists(model_filename):
@@ -163,7 +164,7 @@ def load_model():
         final_path = model_filename
 
     try:
-        # ✅✅✅ แก้ไข: เพิ่ม compile=False เพื่อแก้ปัญหา reduction=auto ✅✅✅
+        # ✅ เพิ่ม compile=False เพื่อแก้ปัญหา Version Compatibility
         return tf.keras.models.load_model(
             final_path, 
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
@@ -184,21 +185,29 @@ def load_class_names():
         'ma', 'mi', 'mu', 'me', 'mo',
         'ya', 'yu', 'yo',
         'ra', 'ri', 'ru', 're', 'ro',
-        'wa', 'wo', 'nn'
+        'wa', 'wo', 'nn' # ✅ คงไว้เป็น nn ตามที่คุณใช้งาน
     ]
 
-# --- 5. Preprocessing ---
+# --- 5. Preprocessing (ปรับปรุงให้ตรงกับ Training) ---
 def enhance_image_for_prediction(img_array):
+    # 1. แปลงเป็น Grayscale
     if len(img_array.shape) == 3:
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     else:
         gray = img_array
 
-    _, thresh = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
-    kernel = np.ones((2, 2), np.uint8)
-    img_thick = cv2.erode(thresh, kernel, iterations=1)
+    # 2. ✅ ใช้ Otsu's Thresholding แบบ Invert 
+    # (เปลี่ยนพื้นขาวตัวดำ ให้เป็น พื้นดำตัวขาว เหมือนที่โมเดลเรียนมา)
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    # 3. ✅ ใช้ Dilation (ขยายเส้นขาวให้หนาขึ้น) แทน Erosion
+    kernel = np.ones((3, 3), np.uint8)
+    img_thick = cv2.dilate(binary, kernel, iterations=1)
+    
+    # 4. แปลงกลับเป็น RGB
     img_back = cv2.cvtColor(img_thick, cv2.COLOR_GRAY2RGB)
     
+    # 5. Preprocess ของ MobileNetV2
     return tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
 
 def import_and_predict(image_data, model):
@@ -296,8 +305,8 @@ if is_single_view:
                                         idx = np.argmax(preds)
                                         conf = np.max(preds) * 100
                                         
-                                        # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
-                                        if conf < 50.0: # ปรับระดับความเข้มงวดตรงนี้
+                                        # ตัดสินใจกรณีคะแนนต่ำ (ปรับได้ตามต้องการ)
+                                        if conf < 50.0: 
                                             final_res = "❓ Unknown (เขียนใหม่)"
                                             res_code = "Unknown"
                                         else:
@@ -312,7 +321,8 @@ if is_single_view:
                                                 'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                                 'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                                 'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (nn)'
+                                                'wa': 'わ (wa)', 'wo': 'を (wo)', 
+                                                'nn': 'ん (nn)' # ✅ ใช้ nn ตามเดิม
                                             }
                                             final_res = hiragana_map.get(res_code, res_code)
                                             
@@ -354,8 +364,8 @@ else:
                                     preds = import_and_predict(image, model)
                                     idx = np.argmax(preds); conf = np.max(preds) * 100
                                     
-                                    # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
-                                    if conf < 65.0: # ปรับระดับตรงนี้
+                                    # ตัดสินใจกรณีคะแนนต่ำ
+                                    if conf < 50.0: 
                                         final_res = "❓ Unknown (เขียนใหม่)"
                                     else:
                                         res_code = class_names[idx]
@@ -369,7 +379,8 @@ else:
                                             'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                             'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
                                             'ra': 'ら (ra)', 'ri': 'り (ri)', 'ru': 'る (ru)', 're': 'れ (re)', 'ro': 'ろ (ro)',
-                                            'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (nn)'
+                                            'wa': 'わ (wa)', 'wo': 'を (wo)', 
+                                            'nn': 'ん (nn)' # ✅ ใช้ nn ตามเดิม
                                         }
                                         final_res = hiragana_map.get(res_code, res_code)
                                     
