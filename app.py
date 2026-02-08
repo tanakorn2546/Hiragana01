@@ -139,31 +139,36 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ที่เทรนเสร็จแล้วตรงนี้ ⚠️⚠️⚠️
-    GOOGLE_DRIVE_FILE_ID = '1YdYcwMFVFWC94lGigpIbVW0tW4RvCBic' 
+    # ⚠️⚠️⚠️ ถ้าคุณอัปโหลดไฟล์ใหม่ขึ้น Google Drive อย่าลืมเปลี่ยน ID ตรงนี้ ⚠️⚠️⚠️
+    # ถ้ายังไม่ได้อัปโหลด ระบบจะใช้ไฟล์ในโฟลเดอร์ saved_models เครื่องตัวเอง
+    GOOGLE_DRIVE_FILE_ID = '1uXgIdk_tOQPsgG025pmGNLlSl5c1MWys' 
     # -------------------------------------------------------------
     
-    model_filename = 'hiragana_mobilenet_v2_enhancedv3.h5'
+    # ✅ เปลี่ยนชื่อไฟล์ให้ตรงกับ Train v4 Ultimate
+    model_filename = 'hiragana_mobilenet_v2_ultimate.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
+    # เช็คว่ามีไฟล์อยู่ในเครื่องไหม
     if not os.path.exists(model_filename):
         local_path = os.path.join('saved_models', model_filename)
         if os.path.exists(local_path):
             final_path = local_path
         else:
             try:
+                # ถ้าหาไม่เจอจริงๆ ค่อยโหลด (แต่ต้องมั่นใจว่า ID Google Drive เป็นของไฟล์ใหม่แล้ว)
                 st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
                 gdown.download(url, model_filename, quiet=False)
                 final_path = model_filename
                 st.success("✅ Download Success!")
             except Exception as e:
-                st.error(f"❌ Download Error: {e}")
+                st.warning(f"⚠️ หาไฟล์โมเดลไม่เจอ: {e}")
+                st.info("💡 กรุณานำไฟล์ 'hiragana_mobilenet_v2_ultimate.h5' ไปใส่ในโฟลเดอร์เดียวกับ app.py หรือ saved_models")
                 return None
     else:
         final_path = model_filename
 
     try:
-        # ✅✅✅ แก้ไข: เพิ่ม compile=False เพื่อแก้ปัญหา reduction=auto ✅✅✅
+        # Load Model
         return tf.keras.models.load_model(
             final_path, 
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
@@ -187,16 +192,25 @@ def load_class_names():
         'wa', 'wo', 'nn'
     ]
 
-# --- 5. Preprocessing ---
+# --- 5. Preprocessing (Synced with Training v4) ---
 def enhance_image_for_prediction(img_array):
+    # 1. Convert to Grayscale
     if len(img_array.shape) == 3:
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     else:
         gray = img_array
 
-    _, thresh = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
+    # 2. ✅ NEW: Gaussian Blur (เพื่อให้เหมือนตอนเทรน)
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+
+    # 3. Thresholding
+    _, thresh = cv2.threshold(blurred, 190, 255, cv2.THRESH_BINARY)
+    
+    # 4. Erode (Thicken lines)
     kernel = np.ones((2, 2), np.uint8)
     img_thick = cv2.erode(thresh, kernel, iterations=1)
+    
+    # 5. Convert back to RGB for MobileNet
     img_back = cv2.cvtColor(img_thick, cv2.COLOR_GRAY2RGB)
     
     return tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
@@ -220,7 +234,7 @@ with st.sidebar:
     st.success(f"ตรวจแล้ว: {checked_w}")
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Final)</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Ultimate)</div>', unsafe_allow_html=True)
 
 query_params = st.query_params
 req_work_id = query_params.get("work_id", None)
@@ -296,8 +310,9 @@ if is_single_view:
                                         idx = np.argmax(preds)
                                         conf = np.max(preds) * 100
                                         
-                                        # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
-                                        if conf < 60.0: # ปรับระดับความเข้มงวดตรงนี้
+                                        # 🔥🔥🔥 Logic ปรับปรุงใหม่ 🔥🔥🔥
+                                        # โมเดลใหม่ควรจะมั่นใจสูง ถ้าต่ำกว่า 60 คือผิดปกติ
+                                        if conf < 60.0: 
                                             final_res = "❓ Unknown (เขียนใหม่)"
                                             res_code = "Unknown"
                                         else:
@@ -315,7 +330,7 @@ if is_single_view:
                                                 'wa': 'わ (wa)', 'wo': 'を (wo)', 'nn': 'ん (nn)'
                                             }
                                             final_res = hiragana_map.get(res_code, res_code)
-                                            
+                                        
                                         if update_database(current_id, active_table, final_res, conf):
                                             time.sleep(0.3); st.rerun()
                                     except Exception as e: st.error(f"Error: {e}")
@@ -355,7 +370,7 @@ else:
                                     idx = np.argmax(preds); conf = np.max(preds) * 100
                                     
                                     # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
-                                    if conf < 65.0: # ปรับระดับตรงนี้
+                                    if conf < 60.0: 
                                         final_res = "❓ Unknown (เขียนใหม่)"
                                     else:
                                         res_code = class_names[idx]
