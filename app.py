@@ -139,13 +139,11 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ใน Google Drive ตรงนี้ ⚠️⚠️⚠️
-    # ถ้ายังไม่ได้อัปโหลดใหม่ ให้ใช้วิธีเอาไฟล์วางไว้ข้างๆ app.py แทนชั่วคราว
-    GOOGLE_DRIVE_FILE_ID = '1BkIL8jF1XERR3jPXKAOmSb11Qd-MbYQg' 
+    # ⚠️⚠️⚠️ ใส่ ID ของไฟล์โมเดลตัวใหม่ที่เทรนเสร็จแล้วตรงนี้ ⚠️⚠️⚠️
+    GOOGLE_DRIVE_FILE_ID = '1MVPo67mbrt4w45deeol8IAUcRSXVr8SE' 
     # -------------------------------------------------------------
     
-    # ✅ เปลี่ยนชื่อไฟล์ให้ตรงกับที่เทรนมาใหม่
-    model_filename = 'hiragana_mobilenet_v2_smart_crop.h5'
+    model_filename = 'hiragana_mobilenet_v2_enhancedv2.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
     if not os.path.exists(model_filename):
@@ -153,25 +151,19 @@ def load_model():
         if os.path.exists(local_path):
             final_path = local_path
         else:
-            # ถ้าหาไฟล์ไม่เจอ จะลองโหลด (แต่ถ้า ID ผิดจะโหลดไฟล์เก่ามา ให้ระวัง)
             try:
                 st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
                 gdown.download(url, model_filename, quiet=False)
                 final_path = model_filename
                 st.success("✅ Download Success!")
             except Exception as e:
-                # ถ้าโหลดไม่ได้ ให้ลองหาไฟล์ชื่อเก่าเผื่อไว้
-                old_filename = 'hiragana_mobilenet_v2_enhancedv2.h5'
-                if os.path.exists(old_filename):
-                    final_path = old_filename
-                    st.warning("⚠️ ใช้โมเดลรุ่นเก่า (ไม่พบไฟล์ใหม่)")
-                else:
-                    st.error(f"❌ Model not found: {e}")
-                    return None
+                st.error(f"❌ Download Error: {e}")
+                return None
     else:
         final_path = model_filename
 
     try:
+        # ✅✅✅ แก้ไข: เพิ่ม compile=False เพื่อแก้ปัญหา reduction=auto ✅✅✅
         return tf.keras.models.load_model(
             final_path, 
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
@@ -195,78 +187,25 @@ def load_class_names():
         'wa', 'wo', 'nn'
     ]
 
-# --- 5. New Smart Preprocessing (ทีเด็ด!) ---
-IMG_SIZE = 128 # ต้องตรงกับที่เทรน
+# --- 5. Preprocessing ---
+def enhance_image_for_prediction(img_array):
+    if len(img_array.shape) == 3:
+        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    else:
+        gray = img_array
 
-def smart_process_image(pil_image):
-    """
-    ฟังก์ชันเตรียมภาพแบบฉลาด: หา Contours > Crop > Resize > Pad
-    """
-    try:
-        # 1. แปลง PIL เป็น OpenCV Format (RGB)
-        img_array = np.array(pil_image.convert('RGB'))
-        
-        # 2. แปลงเป็น Grayscale
-        if len(img_array.shape) == 3:
-            gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-        else:
-            gray = img_array
-
-        # 3. Thresholding (กลับสี: พื้นดำ ตัวหนังสือขาว เพื่อหา Contours)
-        # ใช้ Otsu เพื่อหาค่าที่ดีที่สุด
-        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-        # 4. หา Contours
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        if len(contours) > 0:
-            # หา Bounding Box ที่ใหญ่ที่สุด (สมมติว่าเป็นตัวอักษร)
-            c = max(contours, key=cv2.contourArea)
-            x, y, w, h = cv2.boundingRect(c)
-            
-            # กรอง Noise จุดเล็กๆ
-            if w > 10 and h > 10:
-                # Crop เอาเฉพาะตัวอักษร
-                roi = gray[y:y+h, x:x+w]
-                
-                # คำนวณขนาดที่จะ Resize ลงไปโดยรักษา Aspect Ratio
-                target_h, target_w = IMG_SIZE, IMG_SIZE
-                final_img = np.ones((target_h, target_w), dtype=np.uint8) * 255 # พื้นขาว
-                
-                aspect = w / h
-                if aspect > 1: # กว้างมากกว่าสูง
-                    new_w = target_w - 20 # เผื่อขอบ
-                    new_h = int(new_w / aspect)
-                else: # สูงมากกว่ากว้าง
-                    new_h = target_h - 20
-                    new_w = int(new_h * aspect)
-                
-                # Resize
-                roi_resized = cv2.resize(roi, (new_w, new_h), interpolation=cv2.INTER_AREA)
-                
-                # แปะลงกลางภาพ
-                y_offset = (target_h - new_h) // 2
-                x_offset = (target_w - new_w) // 2
-                final_img[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = roi_resized
-                
-                # แปลงกลับเป็น RGB 3 Channels
-                final_rgb = cv2.cvtColor(final_img, cv2.COLOR_GRAY2RGB)
-                return tf.keras.applications.mobilenet_v2.preprocess_input(final_rgb.astype(np.float32))
-
-        # ถ้าหา Contour ไม่เจอ (เช่น ภาพขาวล้วน) หรือ Error ให้ใช้ภาพเดิม Resize เอา
-        img_resized = cv2.resize(img_array, (IMG_SIZE, IMG_SIZE))
-        return tf.keras.applications.mobilenet_v2.preprocess_input(img_resized.astype(np.float32))
-
-    except Exception as e:
-        st.error(f"Error in processing: {e}")
-        # Fallback กรณี Error จริงๆ
-        img_resized = pil_image.resize((IMG_SIZE, IMG_SIZE))
-        img_array = np.array(img_resized)
-        return tf.keras.applications.mobilenet_v2.preprocess_input(img_array.astype(np.float32))
+    _, thresh = cv2.threshold(gray, 190, 255, cv2.THRESH_BINARY)
+    kernel = np.ones((2, 2), np.uint8)
+    img_thick = cv2.erode(thresh, kernel, iterations=1)
+    img_back = cv2.cvtColor(img_thick, cv2.COLOR_GRAY2RGB)
+    
+    return tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
 
 def import_and_predict(image_data, model):
-    # ส่ง PIL Image เข้าไปที่ฟังก์ชัน smart_process_image โดยตรง
-    processed_img = smart_process_image(image_data)
+    image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
+    if image.mode != "RGB": image = image.convert("RGB")
+    img_array = np.array(image)
+    processed_img = enhance_image_for_prediction(img_array)
     img_batch = np.expand_dims(processed_img, axis=0)
     return model.predict(img_batch)
 
@@ -281,7 +220,7 @@ with st.sidebar:
     st.success(f"ตรวจแล้ว: {checked_w}")
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Final+SmartCrop)</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Final)</div>', unsafe_allow_html=True)
 
 query_params = st.query_params
 req_work_id = query_params.get("work_id", None)
@@ -357,8 +296,8 @@ if is_single_view:
                                         idx = np.argmax(preds)
                                         conf = np.max(preds) * 100
                                         
-                                        # 🔥🔥🔥 Unknown Logic (Smart Crop จะแม่นยำขึ้น อาจปรับ % ขึ้นได้) 🔥🔥🔥
-                                        if conf < 60.0: 
+                                        # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
+                                        if conf < 60.0: # ปรับระดับความเข้มงวดตรงนี้
                                             final_res = "❓ Unknown (เขียนใหม่)"
                                             res_code = "Unknown"
                                         else:
