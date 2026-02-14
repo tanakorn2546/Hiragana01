@@ -9,9 +9,7 @@ import io
 import cv2
 import gdown
 
-# =============================================================================
-# 1. Page Configuration
-# =============================================================================
+# --- 1. Page Configuration ---
 st.set_page_config(
     page_title="Hiragana Sensei AI",
     page_icon="🌸",
@@ -19,9 +17,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# =============================================================================
-# 2. CSS Styling
-# =============================================================================
+# --- 2. CSS Styling ---
 def local_css():
     st.markdown("""
     <style>
@@ -53,9 +49,7 @@ def local_css():
 
 local_css()
 
-# =============================================================================
-# 3. Database Configuration
-# =============================================================================
+# --- 3. Database Configuration ---
 TABLE_CONFIG = {
     "progress": {
         "label_col": "char_code",       
@@ -136,9 +130,7 @@ def get_stats():
         return cursor.fetchone()
     except: return 0, 0
 
-# =============================================================================
-# 4. Model Loading (Updated for v5 Master)
-# =============================================================================
+# --- 4. Model Loading with FIX ---
 
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, **kwargs):
@@ -147,43 +139,36 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    # ⚠️⚠️⚠️ สำคัญ: หลังจากเทรนเสร็จ ให้นำไฟล์ 'hiragana_mobilenet_v2_v5_master.h5' 
-    # มาวางในโฟลเดอร์ saved_models หรือโฟลเดอร์เดียวกับ app.py ⚠️⚠️⚠️
-    
-    # หากคุณอัปโหลดไฟล์ใหม่ขึ้น Google Drive แล้ว ให้เอา ID มาใส่ตรงนี้
-    # (ถ้ายังไม่อัปโหลด ระบบจะพยายามหาจากในเครื่องก่อน)
-    GOOGLE_DRIVE_FILE_ID = '1_9bJyDce99h5o8sVqWpFWYK1gwRGg31c' 
+    # ⚠️⚠️⚠️ ถ้าคุณอัปโหลดไฟล์ใหม่ขึ้น Google Drive อย่าลืมเปลี่ยน ID ตรงนี้ ⚠️⚠️⚠️
+    # ถ้ายังไม่ได้อัปโหลด ระบบจะใช้ไฟล์ในโฟลเดอร์ saved_models เครื่องตัวเอง
+    GOOGLE_DRIVE_FILE_ID = '1uXgIdk_tOQPsgG025pmGNLlSl5c1MWys' 
     # -------------------------------------------------------------
     
-    # ✅ ชื่อไฟล์ตรงกับ v5 Master
-    model_filename = 'hiragana_mobilenet_v2_v5_master.h5'
+    # ✅ เปลี่ยนชื่อไฟล์ให้ตรงกับ Train v4 Ultimate
+    model_filename = 'hiragana_mobilenet_v2_ultimate.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
-    # ตรวจสอบไฟล์ในเครื่อง
+    # เช็คว่ามีไฟล์อยู่ในเครื่องไหม
     if not os.path.exists(model_filename):
         local_path = os.path.join('saved_models', model_filename)
         if os.path.exists(local_path):
             final_path = local_path
         else:
-            # ถ้าไม่มีในเครื่อง จะพยายามโหลด (แต่ต้องมี ID ที่ถูกต้อง)
             try:
-                if GOOGLE_DRIVE_FILE_ID != 'PLACEHOLDER_FOR_NEW_ID':
-                    st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
-                    gdown.download(url, model_filename, quiet=False)
-                    final_path = model_filename
-                    st.success("✅ Download Success!")
-                else:
-                    st.warning(f"⚠️ ไม่พบไฟล์โมเดล '{model_filename}' ในเครื่อง")
-                    st.info("💡 กรุณานำไฟล์ที่เทรนเสร็จแล้วมาวางไว้ที่โฟลเดอร์ saved_models")
-                    return None
+                # ถ้าหาไม่เจอจริงๆ ค่อยโหลด (แต่ต้องมั่นใจว่า ID Google Drive เป็นของไฟล์ใหม่แล้ว)
+                st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
+                gdown.download(url, model_filename, quiet=False)
+                final_path = model_filename
+                st.success("✅ Download Success!")
             except Exception as e:
-                st.error(f"❌ Download Error: {e}")
+                st.warning(f"⚠️ หาไฟล์โมเดลไม่เจอ: {e}")
+                st.info("💡 กรุณานำไฟล์ 'hiragana_mobilenet_v2_ultimate.h5' ไปใส่ในโฟลเดอร์เดียวกับ app.py หรือ saved_models")
                 return None
     else:
         final_path = model_filename
 
     try:
-        # Load Model (ใช้ compile=False เพื่อความเข้ากันได้)
+        # Load Model
         return tf.keras.models.load_model(
             final_path, 
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
@@ -207,9 +192,7 @@ def load_class_names():
         'wa', 'wo', 'nn'
     ]
 
-# =============================================================================
-# 5. Preprocessing (Synced with v5 Master Training)
-# =============================================================================
+# --- 5. Preprocessing (Synced with Training v4) ---
 def enhance_image_for_prediction(img_array):
     # 1. Convert to Grayscale
     if len(img_array.shape) == 3:
@@ -217,13 +200,13 @@ def enhance_image_for_prediction(img_array):
     else:
         gray = img_array
 
-    # 2. ✅ NEW: Gaussian Blur (ต้องมีเพื่อให้เหมือนตอนเทรน)
+    # 2. ✅ NEW: Gaussian Blur (เพื่อให้เหมือนตอนเทรน)
     blurred = cv2.GaussianBlur(gray, (3, 3), 0)
 
     # 3. Thresholding
     _, thresh = cv2.threshold(blurred, 190, 255, cv2.THRESH_BINARY)
     
-    # 4. ✅ FIXED: ใช้ Kernel 2x2 (ลดจาก 3x3) เพื่อเก็บรายละเอียดเส้นซ้อน
+    # 4. Erode (Thicken lines)
     kernel = np.ones((2, 2), np.uint8)
     img_thick = cv2.erode(thresh, kernel, iterations=1)
     
@@ -240,9 +223,7 @@ def import_and_predict(image_data, model):
     img_batch = np.expand_dims(processed_img, axis=0)
     return model.predict(img_batch)
 
-# =============================================================================
-# 6. Main Application Logic
-# =============================================================================
+# --- 6. Main Application Logic ---
 model = load_model()
 class_names = load_class_names()
 
@@ -253,7 +234,7 @@ with st.sidebar:
     st.success(f"ตรวจแล้ว: {checked_w}")
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Precision Master)</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Ultimate)</div>', unsafe_allow_html=True)
 
 query_params = st.query_params
 req_work_id = query_params.get("work_id", None)
@@ -329,7 +310,8 @@ if is_single_view:
                                         idx = np.argmax(preds)
                                         conf = np.max(preds) * 100
                                         
-                                        # Strict Threshold for Precision
+                                        # 🔥🔥🔥 Logic ปรับปรุงใหม่ 🔥🔥🔥
+                                        # โมเดลใหม่ควรจะมั่นใจสูง ถ้าต่ำกว่า 60 คือผิดปกติ
                                         if conf < 60.0: 
                                             final_res = "❓ Unknown (เขียนใหม่)"
                                             res_code = "Unknown"
@@ -387,6 +369,7 @@ else:
                                     preds = import_and_predict(image, model)
                                     idx = np.argmax(preds); conf = np.max(preds) * 100
                                     
+                                    # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
                                     if conf < 60.0: 
                                         final_res = "❓ Unknown (เขียนใหม่)"
                                     else:
