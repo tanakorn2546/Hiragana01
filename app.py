@@ -141,11 +141,11 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 def load_model():
     # ⚠️⚠️⚠️ ถ้าคุณอัปโหลดไฟล์ใหม่ขึ้น Google Drive อย่าลืมเปลี่ยน ID ตรงนี้ ⚠️⚠️⚠️
     # ถ้ายังไม่ได้อัปโหลด ระบบจะใช้ไฟล์ในโฟลเดอร์ saved_models เครื่องตัวเอง
-    GOOGLE_DRIVE_FILE_ID = '1uXgIdk_tOQPsgG025pmGNLlSl5c1MWys' 
+    GOOGLE_DRIVE_FILE_ID = '1Lu9cK1Z3RR-OuWbYSQ5uNzBWgte2c8XM' 
     # -------------------------------------------------------------
     
     # ✅ เปลี่ยนชื่อไฟล์ให้ตรงกับ Train v4 Ultimate
-    model_filename = 'hiragana_mobilenet_v2_ultimate.h5'
+    model_filename = 'hiragana_mobilenet_v2_v6_supreme.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
     # เช็คว่ามีไฟล์อยู่ในเครื่องไหม
