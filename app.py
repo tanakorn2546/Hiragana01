@@ -139,23 +139,16 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    # ⚠️⚠️⚠️ ถ้าคุณอัปโหลดไฟล์ใหม่ขึ้น Google Drive อย่าลืมเปลี่ยน ID ตรงนี้ ⚠️⚠️⚠️
-    # ถ้ายังไม่ได้อัปโหลด ระบบจะใช้ไฟล์ในโฟลเดอร์ saved_models เครื่องตัวเอง
     GOOGLE_DRIVE_FILE_ID = '1uXgIdk_tOQPsgG025pmGNLlSl5c1MWys' 
-    # -------------------------------------------------------------
-    
-    # ✅ เปลี่ยนชื่อไฟล์ให้ตรงกับ Train v4 Ultimate
     model_filename = 'hiragana_mobilenet_v2_ultimate.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
-    # เช็คว่ามีไฟล์อยู่ในเครื่องไหม
     if not os.path.exists(model_filename):
         local_path = os.path.join('saved_models', model_filename)
         if os.path.exists(local_path):
             final_path = local_path
         else:
             try:
-                # ถ้าหาไม่เจอจริงๆ ค่อยโหลด (แต่ต้องมั่นใจว่า ID Google Drive เป็นของไฟล์ใหม่แล้ว)
                 st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
                 gdown.download(url, model_filename, quiet=False)
                 final_path = model_filename
@@ -168,7 +161,6 @@ def load_model():
         final_path = model_filename
 
     try:
-        # Load Model
         return tf.keras.models.load_model(
             final_path, 
             custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
@@ -194,23 +186,17 @@ def load_class_names():
 
 # --- 5. Preprocessing (Synced with Training v4) ---
 def enhance_image_for_prediction(img_array):
-    # 1. Convert to Grayscale
     if len(img_array.shape) == 3:
         gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     else:
         gray = img_array
 
-    # 2. ✅ NEW: Gaussian Blur (เพื่อให้เหมือนตอนเทรน)
     blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-
-    # 3. Thresholding
     _, thresh = cv2.threshold(blurred, 190, 255, cv2.THRESH_BINARY)
     
-    # 4. Erode (Thicken lines)
     kernel = np.ones((2, 2), np.uint8)
     img_thick = cv2.erode(thresh, kernel, iterations=1)
     
-    # 5. Convert back to RGB for MobileNet
     img_back = cv2.cvtColor(img_thick, cv2.COLOR_GRAY2RGB)
     
     return tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
@@ -223,6 +209,16 @@ def import_and_predict(image_data, model):
     img_batch = np.expand_dims(processed_img, axis=0)
     return model.predict(img_batch)
 
+# --- NEW: Scoring Logic ---
+def calculate_score(conf):
+    """คำนวณคะแนนตามความมั่นใจของโมเดล"""
+    if conf >= 85.0:
+        return 1.0
+    elif conf >= 60.0:
+        return 0.5
+    else:
+        return 0.0
+
 # --- 6. Main Application Logic ---
 model = load_model()
 class_names = load_class_names()
@@ -232,6 +228,15 @@ with st.sidebar:
     total_w, checked_w = get_stats()
     st.info(f"ภาพทั้งหมด: {total_w}")
     st.success(f"ตรวจแล้ว: {checked_w}")
+    
+    # แสดงเกณฑ์คะแนนใน Sidebar
+    st.markdown("---")
+    st.markdown("### 📊 เกณฑ์การให้คะแนน")
+    st.markdown("""
+    - **85% - 100%**: ได้ 1 คะแนน
+    - **60% - 84.9%**: ได้ 0.5 คะแนน
+    - **ต่ำกว่า 60%**: ได้ 0 คะแนน
+    """)
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
 st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Ultimate)</div>', unsafe_allow_html=True)
@@ -286,11 +291,16 @@ if is_single_view:
                         parts = saved_result.split(' ')
                         char_part = parts[0]
                         romaji_part = parts[1] if len(parts) > 1 else ''
+                        score = calculate_score(saved_conf) # คำนวณคะแนน
+                        
                         st.markdown(f"""
                         <div class="result-card" style="border-top-color:{mode_color};">
                             <div style="font-size:1.2rem; color:#555;">{romaji_part}</div>
                             <div class="big-char" style="color:{mode_color};">{char_part}</div>
-                            <div style="color:green; font-weight:bold;">{saved_conf:.1f}%</div>
+                            <div style="color:green; font-weight:bold; margin-top:10px;">
+                                ความมั่นใจ: {saved_conf:.1f}%<br>
+                                <span style="font-size:1.2rem; color:#FF9800;">ได้คะแนน: {score}</span>
+                            </div>
                         </div>""", unsafe_allow_html=True)
                         st.write("")
                         if st.button("🔄 ตรวจใหม่", use_container_width=True):
@@ -310,8 +320,6 @@ if is_single_view:
                                         idx = np.argmax(preds)
                                         conf = np.max(preds) * 100
                                         
-                                        # 🔥🔥🔥 Logic ปรับปรุงใหม่ 🔥🔥🔥
-                                        # โมเดลใหม่ควรจะมั่นใจสูง ถ้าต่ำกว่า 60 คือผิดปกติ
                                         if conf < 60.0: 
                                             final_res = "❓ Unknown (เขียนใหม่)"
                                             res_code = "Unknown"
@@ -360,7 +368,8 @@ else:
                 with col_img: st.markdown(f"**โจทย์:** `{true_label}`"); st.image(image, use_container_width=True)
                 with col_res:
                     if saved_result:
-                        st.success(f"{saved_result}\n\nConf: {saved_conf:.1f}%")
+                        score = calculate_score(saved_conf) # คำนวณคะแนน
+                        st.success(f"{saved_result}\n\nความมั่นใจ: {saved_conf:.1f}%\n\n**ได้คะแนน: {score}**")
                         if st.button("🔄 ตรวจใหม่"): update_database(browse_id, "progress", None, 0); st.rerun()
                     else:
                         if st.button("✨ วิเคราะห์"):
@@ -369,7 +378,6 @@ else:
                                     preds = import_and_predict(image, model)
                                     idx = np.argmax(preds); conf = np.max(preds) * 100
                                     
-                                    # 🔥🔥🔥 Unknown Logic 🔥🔥🔥
                                     if conf < 60.0: 
                                         final_res = "❓ Unknown (เขียนใหม่)"
                                     else:
