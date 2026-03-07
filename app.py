@@ -1,13 +1,15 @@
 import streamlit as st
 import tensorflow as tf
-from PIL import Image, ImageOps
+from PIL import Image
 import numpy as np
 import time
 import os
 import mysql.connector
 import io
-import cv2
 import gdown
+
+# นำเข้า preprocess_input ของ ResNet50 (สำคัญมาก)
+from tensorflow.keras.applications.resnet50 import preprocess_input 
 
 # --- 1. Page Configuration ---
 st.set_page_config(
@@ -130,8 +132,7 @@ def get_stats():
         return cursor.fetchone()
     except: return 0, 0
 
-# --- 4. Model Loading with FIX ---
-
+# --- 4. Model Loading ---
 class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
     def __init__(self, **kwargs):
         kwargs.pop('groups', None)
@@ -140,25 +141,28 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 @st.cache_resource
 def load_model():
     GOOGLE_DRIVE_FILE_ID = '1fVfCOr-i1K4swZs9oJKoKd4sOkJ3YVo-' 
-    model_filename = 'resnet50_hiragana_model_finetuned.h5'
+    # อัปเดตชื่อไฟล์ให้ตรงกับที่เทรนล่าสุด
+    model_filename = 'resnet50_hiragana_model_finetunedv2.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
-    if not os.path.exists(model_filename):
-        local_path = os.path.join('saved_models', model_filename)
-        if os.path.exists(local_path):
-            final_path = local_path
-        else:
-            try:
-                st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
-                gdown.download(url, model_filename, quiet=False)
-                final_path = model_filename
-                st.success("✅ Download Success!")
-            except Exception as e:
-                st.warning(f"⚠️ หาไฟล์โมเดลไม่เจอ: {e}")
-                st.info("💡 กรุณานำไฟล์ 'hiragana_mobilenet_v2_ultimate.h5' ไปใส่ในโฟลเดอร์เดียวกับ app.py หรือ saved_models")
-                return None
-    else:
+    # เช็คไฟล์ในเครื่องก่อน
+    if os.path.exists(model_filename):
         final_path = model_filename
+    elif os.path.exists(os.path.join('saved_models', model_filename)):
+        final_path = os.path.join('saved_models', model_filename)
+    elif os.path.exists(os.path.join(r'C:\xampp\htdocs\hiragana\save_01', model_filename)):
+        final_path = os.path.join(r'C:\xampp\htdocs\hiragana\save_01', model_filename)
+    else:
+        # ถ้าไม่เจอในเครื่องให้โหลดจาก Drive
+        try:
+            st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
+            gdown.download(url, model_filename, quiet=False)
+            final_path = model_filename
+            st.success("✅ Download Success!")
+        except Exception as e:
+            st.warning(f"⚠️ หาไฟล์โมเดลไม่เจอ: {e}")
+            st.info(f"💡 กรุณานำไฟล์ '{model_filename}' ไปใส่ในโฟลเดอร์เดียวกับ app.py")
+            return None
 
     try:
         return tf.keras.models.load_model(
@@ -172,44 +176,38 @@ def load_model():
 
 def load_class_names():
     return [
-        'a', 'i', 'u', 'e', 'o',
-        'ka', 'ki', 'ku', 'ke', 'ko',
-        'sa', 'shi', 'su', 'se', 'so',
-        'ta', 'chi', 'tsu', 'te', 'to',
-        'na', 'ni', 'nu', 'ne', 'no',
-        'ha', 'hi', 'fu', 'he', 'ho',
-        'ma', 'mi', 'mu', 'me', 'mo',
-        'ya', 'yu', 'yo',
-        'ra', 'ri', 'ru', 're', 'ro',
-        'wa', 'wo', 'nn'
+        'a', 'i', 'u', 'e', 'o', 'ka', 'ki', 'ku', 'ke', 'ko',
+        'sa', 'shi', 'su', 'se', 'so', 'ta', 'chi', 'tsu', 'te', 'to',
+        'na', 'ni', 'nu', 'ne', 'no', 'ha', 'hi', 'fu', 'he', 'ho',
+        'ma', 'mi', 'mu', 'me', 'mo', 'ya', 'yu', 'yo',
+        'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'nn'
     ]
 
-# --- 5. Preprocessing (Synced with Training v4) ---
-def enhance_image_for_prediction(img_array):
-    if len(img_array.shape) == 3:
-        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-    else:
-        gray = img_array
+# --- 5. Cleaned Preprocessing ---
+def import_and_predict(image, model):
+    # 1. จัดการพื้นหลังโปร่งใสให้ออกมาเป็นสีขาว (กรณีวาดจากแอป/เว็บ)
+    if image.mode == 'RGBA':
+        background = Image.new('RGB', image.size, (255, 255, 255))
+        background.paste(image, mask=image.split()[3]) 
+        image = background
+    elif image.mode != 'RGB':
+        image = image.convert('RGB')
 
-    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-    _, thresh = cv2.threshold(blurred, 190, 255, cv2.THRESH_BINARY)
+    # 2. ปรับขนาดภาพให้เป็น 224x224 แบบคงสัดส่วนเดิมไว้ตรงกลาง
+    image = image.resize((224, 224), Image.Resampling.LANCZOS)
     
-    kernel = np.ones((2, 2), np.uint8)
-    img_thick = cv2.erode(thresh, kernel, iterations=1)
+    # 3. แปลงเป็น Array 
+    img_array = np.array(image, dtype=np.float32)
     
-    img_back = cv2.cvtColor(img_thick, cv2.COLOR_GRAY2RGB)
+    # 4. แปลงสีภาพให้เข้ากับ ResNet50 (สำคัญมาก!)
+    processed_img = preprocess_input(img_array)
     
-    return tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
-
-def import_and_predict(image_data, model):
-    image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
-    if image.mode != "RGB": image = image.convert("RGB")
-    img_array = np.array(image)
-    processed_img = enhance_image_for_prediction(img_array)
+    # 5. เพิ่มมิติภาพ
     img_batch = np.expand_dims(processed_img, axis=0)
+    
     return model.predict(img_batch)
 
-# --- NEW: Scoring Logic ---
+# --- 6. Scoring Logic ---
 def calculate_score(conf):
     """คำนวณคะแนนตามความมั่นใจของโมเดล"""
     if conf >= 85.0:
@@ -219,7 +217,7 @@ def calculate_score(conf):
     else:
         return 0.0
 
-# --- 6. Main Application Logic ---
+# --- 7. Main Application Logic ---
 model = load_model()
 class_names = load_class_names()
 
@@ -229,7 +227,6 @@ with st.sidebar:
     st.info(f"ภาพทั้งหมด: {total_w}")
     st.success(f"ตรวจแล้ว: {checked_w}")
     
-    # แสดงเกณฑ์คะแนนใน Sidebar
     st.markdown("---")
     st.markdown("### 📊 เกณฑ์การให้คะแนน")
     st.markdown("""
@@ -239,7 +236,7 @@ with st.sidebar:
     """)
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย MobileNetV2 (Ultimate)</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย ResNet50 (Ultimate)</div>', unsafe_allow_html=True)
 
 query_params = st.query_params
 req_work_id = query_params.get("work_id", None)
@@ -291,7 +288,7 @@ if is_single_view:
                         parts = saved_result.split(' ')
                         char_part = parts[0]
                         romaji_part = parts[1] if len(parts) > 1 else ''
-                        score = calculate_score(saved_conf) # คำนวณคะแนน
+                        score = calculate_score(saved_conf) 
                         
                         st.markdown(f"""
                         <div class="result-card" style="border-top-color:{mode_color};">
@@ -368,7 +365,7 @@ else:
                 with col_img: st.markdown(f"**โจทย์:** `{true_label}`"); st.image(image, use_container_width=True)
                 with col_res:
                     if saved_result:
-                        score = calculate_score(saved_conf) # คำนวณคะแนน
+                        score = calculate_score(saved_conf) 
                         st.success(f"{saved_result}\n\nความมั่นใจ: {saved_conf:.1f}%\n\n**ได้คะแนน: {score}**")
                         if st.button("🔄 ตรวจใหม่"): update_database(browse_id, "progress", None, 0); st.rerun()
                     else:
