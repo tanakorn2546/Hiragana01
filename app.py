@@ -8,7 +8,7 @@ import mysql.connector
 import io
 import gdown
 
-# 1. แก้ไข: นำเข้า preprocess_input ของ ResNet50 ให้ตรงกับโมเดลที่เทรนมา
+# นำเข้า preprocess_input ของ ResNet50 ให้ตรงกับโมเดลที่เทรนมา
 from tensorflow.keras.applications.resnet50 import preprocess_input 
 
 # --- 1. Page Configuration ---
@@ -135,8 +135,8 @@ def get_stats():
 # --- 4. Model Loading ---
 @st.cache_resource
 def load_model():
-    GOOGLE_DRIVE_FILE_ID = '1y6m5PCGmDFxYF8yz4FyiUVYGOiffdtD2' # อัปเดต ID ไฟล์ใหม่หากอัปขึ้น Drive
-    # เปลี่ยนชื่อไฟล์ให้สอดคล้องกับ ResNet50 (ถ้าคุณอัปโหลดไฟล์ใหม่ทับไปแล้วใช้ชื่อเดิม ก็ไม่ต้องเปลี่ยนครับ)
+    # ⚠️ สำคัญมาก: เช็ค ID นี้ให้ดีว่าตรงกับโมเดล resnet50 ตัวล่าสุดที่คุณเทรนเสร็จแล้ว
+    GOOGLE_DRIVE_FILE_ID = '1y6m5PCGmDFxYF8yz4FyiUVYGOiffdtD2' 
     model_filename = 'resnet50_hiragana_model_research.h5' 
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
@@ -160,33 +160,35 @@ def load_model():
         st.error(f"❌ Model Load Error: {e}")
         return None
 
+# แก้ไข 1: บังคับเรียงลำดับตัวอักษรให้เหมือนที่ Keras เทรน (A-Z)
 def load_class_names():
-    return [
+    classes = [
         'a', 'i', 'u', 'e', 'o', 'ka', 'ki', 'ku', 'ke', 'ko',
         'sa', 'shi', 'su', 'se', 'so', 'ta', 'chi', 'tsu', 'te', 'to',
         'na', 'ni', 'nu', 'ne', 'no', 'ha', 'hi', 'fu', 'he', 'ho',
         'ma', 'mi', 'mu', 'me', 'mo', 'ya', 'yu', 'yo',
         'ra', 'ri', 'ru', 're', 'ro', 'wa', 'wo', 'nn'
     ]
+    return sorted(classes)
 
 # --- 5. Cleaned Preprocessing ---
+# แก้ไข 2: จัดการพื้นหลังภาพจาก Database ที่เป็น Transparent ให้เป็นสีขาว
 def import_and_predict(image, model):
-    # จัดการพื้นหลังโปร่งใสให้เป็นสีขาว
-    if image.mode == 'RGBA':
-        background = Image.new('RGB', image.size, (255, 255, 255))
-        background.paste(image, mask=image.split()[3]) 
-        image = background
-    elif image.mode != 'RGB':
-        image = image.convert('RGB')
-
-    # ย่อขนาดและแปลงเป็น Array
-    image = image.resize((224, 224), Image.Resampling.LANCZOS)
-    img_array = np.array(image, dtype=np.float32)
+    # 1. บังคับแปลงภาพเป็น RGBA เสมอเพื่อดึงช่อง Alpha
+    image = image.convert("RGBA")
     
-    # เพิ่มมิติภาพ (Batch) ก่อน
+    # 2. สร้างกระดาษสีขาวบริสุทธิ์
+    background = Image.new('RGB', image.size, (255, 255, 255))
+    
+    # 3. แปะภาพตัวอักษรลงบนกระดาษขาว ป้องกันพื้นดำ
+    background.paste(image, mask=image.split()[3])
+    
+    # 4. ย่อภาพเป็น 224x224
+    img_resized = background.resize((224, 224), Image.Resampling.BILINEAR)
+    img_array = np.array(img_resized, dtype=np.float32)
+    
+    # 5. จัดรูปและปรับสีแบบ ResNet50
     img_batch = np.expand_dims(img_array, axis=0)
-    
-    # ใช้ preprocess_input ของ ResNet50 
     processed_img = preprocess_input(img_batch)
     
     return model.predict(processed_img)
@@ -306,7 +308,7 @@ if is_single_view:
                                                 'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
                                                 'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
                                                 'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
-                                                'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)', # แก้บั๊ก 'ของ' เป็น 'の'
+                                                'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
                                                 'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
                                                 'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                                 'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
@@ -363,7 +365,7 @@ else:
                                             'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
                                             'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
                                             'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
-                                            'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)', # แก้บั๊ก
+                                            'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
                                             'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
                                             'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                             'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
@@ -372,7 +374,6 @@ else:
                                         }
                                         final_res = hiragana_map.get(res_code, res_code)
                                     
-                                    # แก้บั๊ก: เปลี่ยน final_final_res เป็น final_res 
                                     update_database(browse_id, "progress", final_res, conf)
                                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
