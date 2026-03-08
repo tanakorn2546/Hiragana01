@@ -140,9 +140,9 @@ class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
 
 @st.cache_resource
 def load_model():
-    GOOGLE_DRIVE_FILE_ID = '1x3onG7M4_7wL2YkyJaI2-cBoApxv0wTI' 
+    GOOGLE_DRIVE_FILE_ID = '1y6m5PCGmDFxYF8yz4FyiUVYGOiffdtD2' 
     # อัปเดตชื่อไฟล์ให้ตรงกับที่เทรนล่าสุด
-    model_filename = 'resnet50_hiragana_model_finetunedv2.h5'
+    model_filename = 'resnet50_hiragana_model_research.h5'
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
     # เช็คไฟล์ในเครื่องก่อน
