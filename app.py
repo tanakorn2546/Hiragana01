@@ -8,7 +8,7 @@ import mysql.connector
 import io
 import gdown
 
-# นำเข้า preprocess_input ของ ResNet50 (สำคัญมาก)
+# 1. แก้ไข: นำเข้า preprocess_input ของ ResNet50 ให้ตรงกับโมเดลที่เทรนมา
 from tensorflow.keras.applications.resnet50 import preprocess_input 
 
 # --- 1. Page Configuration ---
@@ -133,43 +133,29 @@ def get_stats():
     except: return 0, 0
 
 # --- 4. Model Loading ---
-class FixedDepthwiseConv2D(tf.keras.layers.DepthwiseConv2D):
-    def __init__(self, **kwargs):
-        kwargs.pop('groups', None)
-        super().__init__(**kwargs)
-
 @st.cache_resource
 def load_model():
-    GOOGLE_DRIVE_FILE_ID = '1y6m5PCGmDFxYF8yz4FyiUVYGOiffdtD2' 
-    # อัปเดตชื่อไฟล์ให้ตรงกับที่เทรนล่าสุด
-    model_filename = 'resnet50_hiragana_model_research.h5'
+    GOOGLE_DRIVE_FILE_ID = '1y6m5PCGmDFxYF8yz4FyiUVYGOiffdtD2' # อัปเดต ID ไฟล์ใหม่หากอัปขึ้น Drive
+    # เปลี่ยนชื่อไฟล์ให้สอดคล้องกับ ResNet50 (ถ้าคุณอัปโหลดไฟล์ใหม่ทับไปแล้วใช้ชื่อเดิม ก็ไม่ต้องเปลี่ยนครับ)
+    model_filename = 'resnet50_hiragana_model_research.h5' 
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
-    # เช็คไฟล์ในเครื่องก่อน
     if os.path.exists(model_filename):
         final_path = model_filename
     elif os.path.exists(os.path.join('saved_models', model_filename)):
         final_path = os.path.join('saved_models', model_filename)
-    elif os.path.exists(os.path.join(r'C:\xampp\htdocs\hiragana\save_01', model_filename)):
-        final_path = os.path.join(r'C:\xampp\htdocs\hiragana\save_01', model_filename)
     else:
-        # ถ้าไม่เจอในเครื่องให้โหลดจาก Drive
         try:
-            st.info(f"☁️ Downloading Model... (ID: {GOOGLE_DRIVE_FILE_ID})")
+            st.info(f"☁️ Downloading Model...")
             gdown.download(url, model_filename, quiet=False)
             final_path = model_filename
             st.success("✅ Download Success!")
         except Exception as e:
             st.warning(f"⚠️ หาไฟล์โมเดลไม่เจอ: {e}")
-            st.info(f"💡 กรุณานำไฟล์ '{model_filename}' ไปใส่ในโฟลเดอร์เดียวกับ app.py")
             return None
 
     try:
-        return tf.keras.models.load_model(
-            final_path, 
-            custom_objects={'DepthwiseConv2D': FixedDepthwiseConv2D},
-            compile=False 
-        )
+        return tf.keras.models.load_model(final_path, compile=False)
     except Exception as e:
         st.error(f"❌ Model Load Error: {e}")
         return None
@@ -185,7 +171,7 @@ def load_class_names():
 
 # --- 5. Cleaned Preprocessing ---
 def import_and_predict(image, model):
-    # 1. จัดการพื้นหลังโปร่งใสให้ออกมาเป็นสีขาว (กรณีวาดจากแอป/เว็บ)
+    # จัดการพื้นหลังโปร่งใสให้เป็นสีขาว
     if image.mode == 'RGBA':
         background = Image.new('RGB', image.size, (255, 255, 255))
         background.paste(image, mask=image.split()[3]) 
@@ -193,29 +179,23 @@ def import_and_predict(image, model):
     elif image.mode != 'RGB':
         image = image.convert('RGB')
 
-    # 2. ปรับขนาดภาพให้เป็น 224x224 แบบคงสัดส่วนเดิมไว้ตรงกลาง
+    # ย่อขนาดและแปลงเป็น Array
     image = image.resize((224, 224), Image.Resampling.LANCZOS)
-    
-    # 3. แปลงเป็น Array 
     img_array = np.array(image, dtype=np.float32)
     
-    # 4. แปลงสีภาพให้เข้ากับ ResNet50 (สำคัญมาก!)
-    processed_img = preprocess_input(img_array)
+    # เพิ่มมิติภาพ (Batch) ก่อน
+    img_batch = np.expand_dims(img_array, axis=0)
     
-    # 5. เพิ่มมิติภาพ
-    img_batch = np.expand_dims(processed_img, axis=0)
+    # ใช้ preprocess_input ของ ResNet50 
+    processed_img = preprocess_input(img_batch)
     
-    return model.predict(img_batch)
+    return model.predict(processed_img)
 
 # --- 6. Scoring Logic ---
 def calculate_score(conf):
-    """คำนวณคะแนนตามความมั่นใจของโมเดล"""
-    if conf >= 85.0:
-        return 1.0
-    elif conf >= 60.0:
-        return 0.5
-    else:
-        return 0.0
+    if conf >= 85.0: return 1.0
+    elif conf >= 60.0: return 0.5
+    else: return 0.0
 
 # --- 7. Main Application Logic ---
 model = load_model()
@@ -226,7 +206,6 @@ with st.sidebar:
     total_w, checked_w = get_stats()
     st.info(f"ภาพทั้งหมด: {total_w}")
     st.success(f"ตรวจแล้ว: {checked_w}")
-    
     st.markdown("---")
     st.markdown("### 📊 เกณฑ์การให้คะแนน")
     st.markdown("""
@@ -236,7 +215,7 @@ with st.sidebar:
     """)
 
 st.markdown('<div class="hero-title">HIRAGANA<br>SENSEI AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือด้วย ResNet50 (Ultimate)</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">ระบบตรวจลายมือ (Ultimate)</div>', unsafe_allow_html=True)
 
 query_params = st.query_params
 req_work_id = query_params.get("work_id", None)
@@ -327,7 +306,7 @@ if is_single_view:
                                                 'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
                                                 'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
                                                 'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
-                                                'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
+                                                'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)', # แก้บั๊ก 'ของ' เป็น 'の'
                                                 'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
                                                 'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                                 'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
@@ -384,7 +363,7 @@ else:
                                             'ka': 'か (ka)', 'ki': 'き (ki)', 'ku': 'く (ku)', 'ke': 'け (ke)', 'ko': 'こ (ko)',
                                             'sa': 'さ (sa)', 'shi': 'し (shi)', 'su': 'す (su)', 'se': 'せ (se)', 'so': 'そ (so)',
                                             'ta': 'た (ta)', 'chi': 'ち (chi)', 'tsu': 'つ (tsu)', 'te': 'て (te)', 'to': 'と (to)',
-                                            'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)',
+                                            'na': 'な (na)', 'ni': 'に (ni)', 'nu': 'ぬ (nu)', 'ne': 'ね (ne)', 'no': 'の (no)', # แก้บั๊ก
                                             'ha': 'は (ha)', 'hi': 'ひ (hi)', 'fu': 'ふ (fu)', 'he': 'へ (he)', 'ho': 'ほ (ho)',
                                             'ma': 'ま (ma)', 'mi': 'み (mi)', 'mu': 'む (mu)', 'me': 'め (me)', 'mo': 'も (mo)',
                                             'ya': 'や (ya)', 'yu': 'ゆ (yu)', 'yo': 'よ (yo)',
@@ -393,6 +372,7 @@ else:
                                         }
                                         final_res = hiragana_map.get(res_code, res_code)
                                     
+                                    # แก้บั๊ก: เปลี่ยน final_final_res เป็น final_res 
                                     update_database(browse_id, "progress", final_res, conf)
                                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
