@@ -136,7 +136,7 @@ def get_stats():
 @st.cache_resource
 def load_model():
     # ⚠️ สำคัญมาก: เช็ค ID นี้ให้ดีว่าตรงกับโมเดล resnet50 ตัวล่าสุดที่คุณเทรนเสร็จแล้ว
-    GOOGLE_DRIVE_FILE_ID = '1y6m5PCGmDFxYF8yz4FyiUVYGOiffdtD2' 
+    GOOGLE_DRIVE_FILE_ID = '10wRjreiaYFecfACUoiFaXZoIVxzgELfG' 
     model_filename = 'resnet50_hiragana_model_research.h5' 
     url = f'https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}'
     
