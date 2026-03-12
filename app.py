@@ -202,8 +202,17 @@ def enhance_image_for_prediction(img_array):
     return tf.keras.applications.mobilenet_v2.preprocess_input(img_back.astype(np.float32))
 
 def import_and_predict(image_data, model):
+    # --- 🛠️ ส่วนที่แก้ไข: สร้างพื้นหลังสีขาวให้ภาพก่อนแปลงเป็น RGB ---
+    if image_data.mode in ('RGBA', 'LA') or (image_data.mode == 'P' and 'transparency' in image_data.info):
+        # สร้างกระดาษสีขาวขนาดเท่ากับภาพเดิม
+        background = Image.new("RGB", image_data.size, (255, 255, 255))
+        # แปะภาพเดิมที่มีความโปร่งใสลงไปบนกระดาษสีขาว (ใช้ Alpha channel เป็นตัวเจาะช่อง)
+        background.paste(image_data, mask=image_data.convert('RGBA').split()[3])
+        image_data = background
+    elif image_data.mode != "RGB":
+        image_data = image_data.convert("RGB")
+        
     image = ImageOps.fit(image_data, (224, 224), Image.Resampling.LANCZOS)
-    if image.mode != "RGB": image = image.convert("RGB")
     img_array = np.array(image)
     processed_img = enhance_image_for_prediction(img_array)
     img_batch = np.expand_dims(processed_img, axis=0)
